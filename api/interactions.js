@@ -19,7 +19,11 @@ export default async function handler(req, res) {
 
   // 2. ตอบกลับการ PING (Discord ใช้เช็คว่า URL เราใช้งานได้ไหม)
   if (interaction.type === InteractionType.PING) {
-    return res.status(200).json({ type: InteractionResponseType.PONG });
+    const responseBody = { type: InteractionResponseType.PONG };
+    
+    // เพิ่มบรรทัดนี้เพื่อดูค่าใน Vercel Log
+    console.log("Sending Response to Discord:", JSON.stringify(responseBody));
+    return res.status(200).json(responseBody);
   }
 
   // 3. จัดการคำสั่ง Slash Command (เช่น /send)
