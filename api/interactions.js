@@ -1,5 +1,4 @@
 import { InteractionType, InteractionResponseType, verifyKey } from 'discord-interactions';
-require('dotenv').config()
 
 export default async function handler(req, res) {
   // 1. ตรวจสอบการยืนยันตัวตน (Security check)
