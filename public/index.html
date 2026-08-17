@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anomsg Tasks</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <section id="login">
+    <h1>Anomsg Tasks</h1>
+    <p>เข้าสู่ระบบด้วย Discord เพื่อจัดการงานของเซิร์ฟเวอร์</p>
+    <button id="login-btn">Login with Discord</button>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <h1>Anomsg Tasks</h1>
+      <span id="who"></span>
+      <button id="logout-btn">ออก</button>
+    </header>
+
+    <p id="error" role="alert" hidden></p>
+
+    <nav>
+      <button data-filter="all" aria-pressed="true">ทั้งหมด</button>
+      <button data-filter="mine" aria-pressed="false">ของฉัน</button>
+      <button data-filter="done" aria-pressed="false">เสร็จแล้ว</button>
+    </nav>
+
+    <form id="add-form">
+      <input id="add-name" placeholder="ชื่องานใหม่" maxlength="200" required>
+      <button type="submit">เพิ่ม</button>
+    </form>
+
+    <ul id="list"></ul>
+  </section>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

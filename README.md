@@ -6,11 +6,19 @@ Discord bot สำหรับส่งข้อความแบบไม่�
 |---|---|
 | `/send message:<ข้อความ> image:<รูป>` | บอทโพสต์ข้อความและ/หรือรูปลงห้องในนามของบอทเอง |
 | `/ping` | เช็คว่าบอทยังทำงานอยู่ พร้อมบอก latency เป็น ms |
+| `/web` | ส่งลิงก์หน้าเว็บสำหรับจัดการ task ของเซิร์ฟเวอร์นี้ (ต้องล็อกอินด้วย Discord ที่หน้าเว็บ) |
+| `/mytask` | ดู task ที่ยังไม่เสร็จและมอบหมายให้คุณในเซิร์ฟเวอร์นี้ |
+| `/task list` | ดู task ที่ยังไม่เสร็จทั้งหมดของเซิร์ฟเวอร์นี้ |
+| `/task add name:<ชื่องาน> assignee:<ผู้รับผิดชอบ>` | เพิ่ม task ใหม่ (`assignee` ไม่บังคับ) |
 
-ทั้ง `message` และ `image` เป็น option ที่ไม่บังคับ แต่ต้องใส่มาอย่างน้อยหนึ่งอย่าง
+ทั้ง `message` และ `image` ของ `/send` เป็น option ที่ไม่บังคับ แต่ต้องใส่มาอย่างน้อยหนึ่งอย่าง
 จะส่งเฉพาะรูปโดยไม่มีข้อความก็ได้
 
-คำตอบของทั้งสองคำสั่งเป็นแบบ ephemeral ที่มีแค่คนสั่งเห็น ตัวตนคนส่งจึงไม่ถูกเปิดเผย
+คำตอบของทุกคำสั่งเป็นแบบ ephemeral ที่มีแค่คนสั่งเห็น ตัวตนคนส่งจึงไม่ถูกเปิดเผยในห้อง
+
+คำสั่งกลุ่ม task (`/web` `/mytask` `/task`) ใช้ได้เฉพาะในเซิร์ฟเวอร์ (ไม่ใช่ DM) และต้องตั้งค่า
+`MONGODB_URI` ไว้ก่อน ไม่งั้นจะตอบว่า "ระบบ task ยังไม่ได้เปิดใช้งาน" — ดูหัวข้อ
+[ตั้งค่าระบบ task: MongoDB และ Discord OAuth2](#ตั้งค่าระบบ-task-mongodb-และ-discord-oauth2)
 
 ## การจัดการรูป
 
@@ -39,15 +47,35 @@ Discord bot สำหรับส่งข้อความแบบไม่�
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `api/interactions.js` | Vercel Function รับ webhook จาก Discord (deploy อัตโนมัติที่ `/api/interactions`) ทำแค่ตรวจลายเซ็นแล้วส่งต่อให้ handler |
+| `api/me.js` | คืนข้อมูล session ปัจจุบัน (`uid`/`name`/`gid`) ให้หน้าเว็บ (`GET /api/me`) |
+| `api/tasks.js` | CRUD ของ task ในเซิร์ฟเวอร์ที่ล็อกอินอยู่ (`GET`/`POST /api/tasks`, `PATCH`/`DELETE /api/tasks?id=`) |
+| `api/tasks/me.js` | task ที่มอบหมายให้ผู้ใช้ที่ล็อกอินอยู่ (`GET /api/tasks/me`) |
+| `api/auth/login.js` | เริ่ม OAuth2 flow กับ Discord (`GET /api/auth/login?guild=`) |
+| `api/auth/callback.js` | รับ callback จาก Discord แลก code เป็น session cookie |
+| `api/auth/logout.js` | ล้าง session cookie (`POST /api/auth/logout`) |
 | `register.js` | สคริปต์รันบนเครื่องตัวเอง ลงทะเบียน slash command กับ Discord (รันครั้งเดียว) |
 | `lib/commands.js` | **แหล่งความจริงเดียว**ของชื่อคำสั่งและ option ทั้ง `register.js` และ handler import จากที่นี่ |
 | `lib/send.js` | ตรรกะของ `/send` ทั้งหมด |
 | `lib/ping.js` | ตรรกะของ `/ping` |
+| `lib/web.js` | ตรรกะของ `/web` — ส่งลิงก์หน้าเว็บกลับไป |
+| `lib/task.js` | ตรรกะของ `/task list` และ `/task add` |
+| `lib/mytask.js` | ตรรกะของ `/mytask` และตัวช่วย `formatTaskLine()` ที่ `/task list` ใช้ร่วมกัน |
 | `lib/discord.js` | ตัวช่วยที่ใช้ร่วมกัน — `ephemeral()`, วัด latency, งบเวลา |
 | `lib/image.js` | ตรวจชนิดไฟล์ภาพและลบ metadata ก่อนอัปโหลด |
 | `lib/rate-limit.js` | จำกัดความถี่ของ `/send` ผ่าน Upstash Redis |
+| `lib/db.js` | เปิด/cache การเชื่อมต่อ MongoDB และ `isTasksEnabled()` (เช็คว่าตั้งค่า `MONGODB_URI` ไว้หรือยัง) |
+| `lib/models/task.js` | Mongoose schema ของ task |
+| `lib/tasks-repo.js` | ประกอบ service จริงที่ต่อ MongoDB (`getTasksService()`) — เทสต์ inject ตัวปลอมแทนได้ |
+| `lib/tasks-service.js` | กฎธุรกิจของ task — validation, สิทธิ์แก้/ลบ, PATCH whitelist |
+| `lib/oauth.js` | แลก OAuth2 code เป็น access token แล้วยืนยันว่าผู้ใช้อยู่ใน guild ที่ขอเข้าจริง |
+| `lib/session.js` | เซ็น/ตรวจ session cookie แบบ stateless (HMAC-SHA256) |
+| `lib/errors.js` | ชนิด error ของชั้น service (`ValidationError`/`ForbiddenError`/`NotFoundError`) ที่ชั้น API แปลงเป็น HTTP status |
+| `lib/api-helpers.js` | ตัวช่วยร่วมของทุก route ใต้ `/api/tasks*` — การ์ด `context()`, `jsonNoStore()`, `parseJsonBody()`, `errorResponse()` |
+| `public/index.html` `public/style.css` `public/app.js` | หน้าเว็บจัดการ task แบบ mobile-first — ไฟล์ static ใน `public/` ถูก deploy ที่ root ของเว็บ (`public/app.js` คือ `/app.js`) |
 
 ทุกอย่างใน `lib/` อยู่นอก `/api` โดยตั้งใจ เพราะ Vercel จะ deploy **ทุกไฟล์ใน `/api`** เป็น endpoint
+รวมถึงไฟล์ในโฟลเดอร์ย่อย เช่น `api/tasks/me.js` กลายเป็น `/api/tasks/me` และ `api/auth/login.js`
+กลายเป็น `/api/auth/login` โดยอัตโนมัติเหมือนกัน
 
 ### เพิ่มคำสั่งใหม่
 
@@ -105,6 +133,10 @@ DISCORD_PUBLIC_KEY
 
 > `APP_ID` ใช้แค่ตอนรัน `register.js` บนเครื่อง ไม่ต้องใส่บน Vercel
 
+ถ้าจะเปิดระบบ task (`/web` `/mytask` `/task` และหน้าเว็บ) ด้วย ต้องใส่เพิ่มอีก 5 ตัว — ดูหัวข้อ
+[ตั้งค่าระบบ task: MongoDB และ Discord OAuth2](#ตั้งค่าระบบ-task-mongodb-และ-discord-oauth2)
+ด้านล่าง ไม่ใส่ก็ deploy ได้ปกติ บอทเดิมทำงานครบ แค่คำสั่งกลุ่ม task จะปิดอยู่
+
 กด Deploy แล้วรอจนเสร็จ
 
 ### 5. ผูก Interactions Endpoint URL
@@ -121,17 +153,64 @@ https://<ชื่อโปรเจกต์>.vercel.app/api/interactions
 > อย่าใช้ URL ของ preview deployment ที่มีตัวเลขต่อท้าย เพราะ Hobby plan ล็อก preview URL
 > ไว้ด้วย Vercel Authentication ทำให้ Discord ยิงเข้าไม่ถึงและบันทึกไม่ผ่าน
 
+## ตั้งค่าระบบ task: MongoDB และ Discord OAuth2
+
+เป็นฟีเจอร์แบบ opt-in เหมือนกับ rate limit (ดูหัวข้อถัดไป) — ถ้าไม่ตั้งค่า `MONGODB_URI` ระบบ task ทั้งชุด
+(คำสั่ง `/web` `/mytask` `/task` และหน้าเว็บที่ `/`) จะถูกปิด ส่วน `/send` กับ `/ping` ทำงานปกติเหมือนเดิม
+ไม่ถูกกระทบเลยเพราะเป็นโค้ดคนละชุดกัน (ดูหัวข้อ [อะไรถูกเก็บ อะไรไม่ถูกเก็บ](#อะไรถูกเก็บ-อะไรไม่ถูกเก็บ))
+
+### 1. สร้างฐานข้อมูล MongoDB
+
+สร้างคลัสเตอร์ฟรีที่ https://www.mongodb.com/cloud/atlas (M0 พอสำหรับใช้งานจริง) แล้วคัดลอก
+connection string จากปุ่ม **Connect → Drivers**
+
+### 2. เปิด Discord OAuth2
+
+ที่ https://discord.com/developers/applications เลือกแอปเดิม (แอปเดียวกับที่ใช้ตอน register คำสั่ง)
+ไปที่ **OAuth2 → General** เก็บค่า **Client ID** กับ **Client Secret** (กด Reset Secret ถ้าหาไม่เจอ)
+แล้วไปที่ **OAuth2 → Redirects** เพิ่ม:
+
+```
+https://<โดเมนจริงของเว็บ>/api/auth/callback
+```
+
+> ต้องเป็น production domain เดียวกับที่ตั้ง `PUBLIC_BASE_URL` เป๊ะๆ (รวม `https://`) ไม่งั้น
+> Discord จะปฏิเสธตอนแลก code เป็น token
+
+### 3. ตั้งค่า Environment Variables
+
+| ตัวแปร | ใช้ทำอะไร |
+|---|---|
+| `MONGODB_URI` | connection string ของ MongoDB — ถ้าว่างไว้ ระบบ task ทั้งชุดจะปิด (ดู `lib/db.js`) |
+| `DISCORD_CLIENT_ID` | OAuth2 → General → Client ID |
+| `DISCORD_CLIENT_SECRET` | OAuth2 → General → Client Secret |
+| `SESSION_SECRET` | กุญแจเซ็น session cookie **ต้องยาวอย่างน้อย 32 ตัวอักษร** สุ่มด้วย `openssl rand -base64 32` — ถ้าว่างหรือสั้นเกินไป โค้ดจะปฏิเสธทั้งการออก session ใหม่และการตรวจ session เดิมทันที (ดู `lib/session.js`) เพื่อไม่ให้มีทางออก session ที่ปลอมแปลงได้ |
+| `PUBLIC_BASE_URL` | โดเมนจริงของเว็บ ไม่มี `/` ปิดท้าย เช่น `https://anomsg.vercel.app` ใช้คำนวณ redirect URI กลับมาที่ `/api/auth/callback` และประกอบลิงก์ที่คำสั่ง `/web` ส่งกลับ |
+
+ใส่ทั้ง 5 ตัวที่ Vercel → Settings → Environment Variables (Production) แล้ว **Redeploy** ค่าใหม่ถึงจะมีผล
+
+### 4. ล็อกอินใช้งานจริง
+
+ผู้ใช้พิมพ์ `/web` ในเซิร์ฟเวอร์ บอทจะตอบลิงก์ `<PUBLIC_BASE_URL>/?guild=<guild id>` แบบ ephemeral กลับมา
+กดลิงก์ → กด "Login with Discord" ที่หน้าเว็บ → Discord ถามสิทธิ์ scope `identify guilds` → หลังยืนยัน
+`api/auth/callback.js` จะเช็คว่าผู้ใช้อยู่ใน guild นั้นจริงก่อนออก session cookie ให้เสมอ (401/403 ถ้าไม่ผ่าน)
+guild id ไม่ใช่ความลับ (ใครก็เดาได้) ด่านตรวจสิทธิ์จริงคือขั้นตอนนี้ ไม่ใช่การซ่อน guild id
+
 ## ทดสอบ
 
 ```bash
 npm test
 ```
 
-รัน 144 เคส ไม่ต้องใช้ token จริงหรือต่อเน็ต แบ่งเป็น 5 ชุด:
+รัน 326 เคส ไม่ต้องใช้ token จริง ไม่ต่อเน็ต และไม่ต้องมี MongoDB จริง แบ่งเป็น 11 ชุด:
 
-- `test/commands.test.mjs` — กัน definition กับ handler หลุดจากกัน (18 เคส) ยืนยันว่า
+- `test/commands.test.mjs` — กัน definition กับ handler หลุดจากกัน (34 เคส) ยืนยันว่า
   option ที่โค้ดอ่านมีอยู่จริง, definition ผ่านกฎของ Discord และทุกคำสั่งที่ประกาศไว้
-  มี handler รับจริง
+  (รวม `/web` `/mytask` `/task`) มี handler รับจริง
+- `test/task-command.test.mjs` — เรียก `handleTask` ตรงๆ (26 เคส) ครอบคลุม `/task list`
+  และ `/task add` โดย inject service ปลอมแทน MongoDB จริง
+- `test/tasks-service.test.mjs` — กฎธุรกิจของ task (27 เคส) validation ของชื่อ/description,
+  PATCH whitelist ฟิลด์ที่แก้ได้, สิทธิ์แก้/ลบเฉพาะเจ้าของงานหรือผู้ถูกมอบหมาย
 - `test/image.test.mjs` — ยิงตัวลบ metadata ตรงๆ (33 เคส) สร้าง JPEG/PNG/WebP
   ที่ฝังพิกัดปลอมไว้แล้วยืนยันว่าพิกัดหายจริง ส่วนภาพยังอยู่ครบ และไฟล์ยังเปิดได้
 - `test/rate-limit.test.mjs` — ปลอม Upstash REST API (29 เคส) ยืนยันว่า id ไม่ถูกเก็บดิบ,
@@ -143,6 +222,15 @@ npm test
 - `test/http-e2e.test.mjs` — เปิด HTTP server จริงแล้วจำลอง adapter ของ Vercel (9 เคส)
   ยิงผ่าน TCP จริงตามลำดับที่ Discord ใช้ตรวจตอนกด Save Endpoint URL
   รวมถึงเช็คว่าข้อความภาษาไทย/emoji เซ็นผ่านและส่งถึงปลายทางไม่เพี้ยน
+- `test/session.test.mjs` — เซ็น/ตรวจ session cookie ตรงๆ (32 เคส) payload ปลอม,
+  ลายเซ็นมั่ว, secret คนละตัว, token หมดอายุ, `SESSION_SECRET` สั้นกว่า 32 ตัวอักษร
+  ต้องถูกปฏิเสธทั้งตอนเซ็นและตอนตรวจ
+- `test/auth.test.mjs` — OAuth2 login/callback/logout (42 เคส) state ปลอมต้องกัน CSRF ได้,
+  ปฏิเสธ guild id ที่ไม่ตรงรูปแบบ, ผู้ใช้ที่ไม่ได้อยู่ใน guild ต้องเข้าไม่ได้ (403)
+- `test/api-tasks.test.mjs` — route ของ `/api/tasks*` (24 เคส) ทุก method ต้องปฏิเสธก่อนแตะ
+  ฐานข้อมูลเมื่อไม่มี session หรือปิดฟีเจอร์ไว้, error ภายในต้องไม่หลุดออกไปให้ผู้ใช้เห็น
+- `test/web-escape.test.mjs` — `buildTaskRow()` จาก `public/app.js` ตรงๆ (15 เคส) ยืนยันว่า
+  ชื่อและ description ที่มี HTML/script ถูกเก็บเป็นข้อความล้วน ไม่มีการประกอบ HTML จากข้อมูลผู้ใช้เลย
 
 ## จำกัดความถี่ (rate limit)
 
@@ -200,11 +288,25 @@ key ที่เก็บจริงหน้าตาเป็น `rl:u:9f2a..
 
 **ดู log**: Vercel Dashboard → โปรเจกต์ → Logs
 
+## อะไรถูกเก็บ อะไรไม่ถูกเก็บ
+
+| ส่วน | เก็บอะไร |
+|---|---|
+| `/send` `/ping` | **ไม่เก็บอะไรเลย** ไม่มี log ว่าใครส่งอะไร ตามหาย้อนหลังไม่ได้ ตัวนับ rate limit เก็บเฉพาะ id ที่ hash แล้วและหมดอายุใน 1 นาที |
+| ระบบ task | **เก็บ Discord user id ถาวร** ในฟิลด์ `createdBy` และ `assignee` เพื่อให้รู้ว่าใครเป็นเจ้าของงาน |
+
+สองส่วนนี้แยกฐานข้อมูลและแยกโค้ดจากกัน `/send` ไม่แตะฐานข้อมูล task เลย และระบบ task ไม่แตะ
+Upstash Redis ของ rate limit เลยเช่นกัน ปิด/เปิดฟีเจอร์หนึ่งจึงไม่กระทบอีกฟีเจอร์หนึ่ง
+
+ระบบ task ยังเก็บ **ชื่องานและ description ตามที่ผู้ใช้พิมพ์เข้ามาแบบคำต่อคำ** (ไม่ hash ไม่ redact)
+เพราะต้องแสดงให้สมาชิกคนอื่นในเซิร์ฟเวอร์เห็น จึงไม่ใช่ระบบไม่ระบุตัวตนเหมือน `/send` — คนที่ล็อกอิน
+เข้าเซิร์ฟเวอร์เดียวกันจะเห็นได้ว่าใครสร้าง/ถูกมอบหมายงานไหน
+
 ## ข้อจำกัดตามการออกแบบ
 
 - รับได้เฉพาะสิ่งที่ Discord ยิงเข้ามา (slash command / ปุ่ม / เมนู) ทำงานที่ต้องฟัง event
   ต่อเนื่องอย่างดักข้อความธรรมดาหรือเล่นเพลงไม่ได้ เพราะไม่ได้ต่อ Gateway ค้างไว้
 - ต้องตอบ Discord ภายใน 3 วินาที ถ้าจะเพิ่มงานที่ช้ากว่านั้นต้องใช้
   `DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE` แล้วตามไปแก้ข้อความทีหลัง
-- ไม่เก็บ log ว่าใครส่งอะไร ตามหาคนก่อกวนย้อนหลังไม่ได้ (ดูหัวข้อ rate limit สำหรับการกันสแปม)
+- ดูหัวข้อ [อะไรถูกเก็บ อะไรไม่ถูกเก็บ](#อะไรถูกเก็บ-อะไรไม่ถูกเก็บ) ด้านบนสำหรับสิ่งที่แต่ละฟีเจอร์บันทึกไว้
 - ปิด mention ทุกชนิดไว้แล้ว (`allowed_mentions: { parse: [] }`) เพื่อกันคนใช้ `/send @everyone` ก่อกวน

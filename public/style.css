@@ -1,0 +1,35 @@
+:root { --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --line: #e0e0e0; --accent: #5865f2; --danger: #da373c; --danger-bg: #fdecea; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #1e1f22; --fg: #f2f3f5; --muted: #a0a4ab; --line: #35373c; --danger-bg: #3c2426; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 42rem; margin: 0 auto; padding: 1rem; overflow-x: hidden; }
+p { line-height: 1.5; }
+header { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+header h1 { font-size: 1.25rem; margin: 0; flex: 1; }
+#who { color: var(--muted); word-break: break-word; }
+button { min-height: 44px; padding: 0 1rem; border: 1px solid var(--line);
+  border-radius: 8px; background: transparent; color: inherit; font-size: 1rem; cursor: pointer; }
+button[type="submit"], #login-btn { background: var(--accent); color: #fff; border-color: var(--accent); }
+nav { display: flex; gap: .5rem; margin: 1rem 0; flex-wrap: wrap; }
+nav button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
+#error { min-height: 44px; display: flex; align-items: center; padding: 0 1rem; margin: 0 0 1rem;
+  border-radius: 8px; background: var(--danger-bg); color: var(--danger); word-break: break-word; }
+#add-form { display: flex; gap: .5rem; }
+#add-form input { flex: 1; min-height: 44px; padding: 0 .75rem;
+  border: 1px solid var(--line); border-radius: 8px; background: transparent;
+  color: inherit; font-size: 1rem; min-width: 0; }
+ul { list-style: none; padding: 0; margin: 1rem 0 0; }
+.task { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem 0;
+  border-bottom: 1px solid var(--line); }
+.task .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .125rem;
+  padding-top: .125rem; }
+.task .name { word-break: break-word; }
+.task.done .name { text-decoration: line-through; color: var(--muted); }
+.task .description { color: var(--muted); font-size: .875rem; word-break: break-word;
+  white-space: pre-wrap; }
+.task .meta { color: var(--muted); font-size: .875rem; }
+.task input[type="checkbox"] { width: 22px; height: 22px; margin-top: .625rem; flex-shrink: 0; }
+.task .delete { flex-shrink: 0; color: var(--danger); border-color: var(--danger); }
