@@ -76,7 +76,13 @@ Index: `{ guildId: 1, done: 1, dueDate: 1 }` ครอบคลุม query ห�
 let cached = globalThis._mongoose ??= { conn: null, promise: null };
 export async function connectDb() {
   if (cached.conn) return cached.conn;
-  cached.promise ??= mongoose.connect(uri, { bufferCommands: false });
+  // ล้าง promise ทิ้งเมื่อต่อไม่สำเร็จ ไม่งั้นการต่อพลาดครั้งเดียวจะค้างเป็น promise ที่ reject
+  // แล้วทุก request ที่เหลือของ instance นั้นจะพังตามไปด้วยจนกว่า instance จะถูกรีไซเคิล
+  cached.promise ??= mongoose.connect(uri, { bufferCommands: false })
+    .catch((err) => {
+      cached.promise = null;
+      throw err;
+    });
   cached.conn = await cached.promise;
   return cached.conn;
 }
