@@ -38,10 +38,25 @@ Discord bot สำหรับส่งข้อความแบบไม่�
 
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `api/interactions.js` | Vercel Function รับ webhook จาก Discord (deploy อัตโนมัติที่ `/api/interactions`) |
+| `api/interactions.js` | Vercel Function รับ webhook จาก Discord (deploy อัตโนมัติที่ `/api/interactions`) ทำแค่ตรวจลายเซ็นแล้วส่งต่อให้ handler |
 | `register.js` | สคริปต์รันบนเครื่องตัวเอง ลงทะเบียน slash command กับ Discord (รันครั้งเดียว) |
-| `lib/image.js` | ตรวจชนิดไฟล์ภาพและลบ metadata ก่อนอัปโหลด (ไม่ได้อยู่ใน `/api` จึงไม่ถูก deploy เป็น function) |
+| `lib/commands.js` | **แหล่งความจริงเดียว**ของชื่อคำสั่งและ option ทั้ง `register.js` และ handler import จากที่นี่ |
+| `lib/send.js` | ตรรกะของ `/send` ทั้งหมด |
+| `lib/ping.js` | ตรรกะของ `/ping` |
+| `lib/discord.js` | ตัวช่วยที่ใช้ร่วมกัน — `ephemeral()`, วัด latency, งบเวลา |
+| `lib/image.js` | ตรวจชนิดไฟล์ภาพและลบ metadata ก่อนอัปโหลด |
 | `lib/rate-limit.js` | จำกัดความถี่ของ `/send` ผ่าน Upstash Redis |
+
+ทุกอย่างใน `lib/` อยู่นอก `/api` โดยตั้งใจ เพราะ Vercel จะ deploy **ทุกไฟล์ใน `/api`** เป็น endpoint
+
+### เพิ่มคำสั่งใหม่
+
+1. เพิ่ม definition ใน `lib/commands.js` (ประกาศชื่อเป็น constant แล้วใช้ constant นั้นใน definition)
+2. เขียน handler ใน `lib/<ชื่อ>.js`
+3. ผูกเข้า `HANDLERS` ใน `api/interactions.js`
+4. รัน `npm run register`
+
+ถ้าลืมข้อ 3 เทสต์จะฟ้องทันทีว่าคำสั่งนั้นไม่มี handler รับ
 
 ไม่ต้องมี `vercel.json` — Vercel deploy ทุกไฟล์ใน `/api` เป็น function ให้เองอัตโนมัติ
 
@@ -112,8 +127,11 @@ https://<ชื่อโปรเจกต์>.vercel.app/api/interactions
 npm test
 ```
 
-รัน 126 เคส ไม่ต้องใช้ token จริงหรือต่อเน็ต แบ่งเป็น 4 ชุด:
+รัน 144 เคส ไม่ต้องใช้ token จริงหรือต่อเน็ต แบ่งเป็น 5 ชุด:
 
+- `test/commands.test.mjs` — กัน definition กับ handler หลุดจากกัน (18 เคส) ยืนยันว่า
+  option ที่โค้ดอ่านมีอยู่จริง, definition ผ่านกฎของ Discord และทุกคำสั่งที่ประกาศไว้
+  มี handler รับจริง
 - `test/image.test.mjs` — ยิงตัวลบ metadata ตรงๆ (33 เคส) สร้าง JPEG/PNG/WebP
   ที่ฝังพิกัดปลอมไว้แล้วยืนยันว่าพิกัดหายจริง ส่วนภาพยังอยู่ครบ และไฟล์ยังเปิดได้
 - `test/rate-limit.test.mjs` — ปลอม Upstash REST API (29 เคส) ยืนยันว่า id ไม่ถูกเก็บดิบ,

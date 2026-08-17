@@ -1,5 +1,6 @@
 // register.js — ลงทะเบียน slash command กับ Discord (รัน `npm run register` บนเครื่องตัวเอง)
 import 'dotenv/config';
+import { COMMAND_DEFINITIONS } from './lib/commands.js';
 
 const APP_ID = process.env.APP_ID;
 const BOT_TOKEN = process.env.DISCORD_TOKEN;
@@ -9,43 +10,14 @@ if (!APP_ID || !BOT_TOKEN) {
   process.exit(1);
 }
 
-// PUT เป็นการแทนที่คำสั่งทั้งหมด — คำสั่งไหนไม่อยู่ใน array นี้จะถูกลบออกจาก Discord
-const commands = [
-  {
-    name: 'send',
-    description: 'ส่งข้อความแบบไม่ระบุตัวตน',
-    // ทั้งสอง option ไม่บังคับ แต่ handler จะปฏิเสธถ้าไม่ใส่มาสักอย่าง
-    // เพื่อให้ส่งเฉพาะรูปโดยไม่มีข้อความก็ได้
-    options: [
-      {
-        name: 'message',
-        type: 3, // String
-        description: 'ข้อความที่คุณต้องการส่ง',
-        required: false,
-        min_length: 1,
-        max_length: 2000, // เพดานความยาวข้อความของ Discord
-      },
-      {
-        name: 'image',
-        type: 11, // Attachment
-        description: 'รูปที่ต้องการแนบ (ระบบจะลบ EXIF และชื่อไฟล์เดิมทิ้งให้)',
-        required: false,
-      },
-    ],
-  },
-  {
-    name: 'ping',
-    description: 'เช็คว่าบอทยังทำงานอยู่และตอบช้าแค่ไหน',
-  },
-];
-
+// PUT เป็นการแทนที่คำสั่งทั้งหมด — คำสั่งไหนไม่อยู่ใน COMMAND_DEFINITIONS จะถูกลบออกจาก Discord
 const res = await fetch(`https://discord.com/api/v10/applications/${APP_ID}/commands`, {
   method: 'PUT',
   headers: {
     Authorization: `Bot ${BOT_TOKEN}`,
     'Content-Type': 'application/json',
   },
-  body: JSON.stringify(commands),
+  body: JSON.stringify(COMMAND_DEFINITIONS),
 });
 
 const body = await res.json();
