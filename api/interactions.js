@@ -4,6 +4,12 @@ import {
   InteractionResponseFlags,
   verifyKey,
 } from 'discord-interactions';
+import {
+  MAX_IMAGE_BYTES,
+  detectImageType,
+  randomImageName,
+  stripMetadata,
+} from '../lib/image.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const DISCORD_EPOCH = 1420070400000;
@@ -89,27 +95,76 @@ export async function POST(request) {
     interaction.type === InteractionType.APPLICATION_COMMAND &&
     interaction.data?.name === 'send'
   ) {
-    const messageContent = interaction.data.options?.find(
-      (option) => option.name === 'message',
-    )?.value;
+    const options = interaction.data.options;
+    const messageContent = options?.find((option) => option.name === 'message')?.value;
+    const imageId = options?.find((option) => option.name === 'image')?.value;
+    const attachment = imageId ? interaction.data.resolved?.attachments?.[imageId] : undefined;
     const channelId = interaction.channel_id;
 
-    if (!messageContent || !channelId) {
-      return ephemeral('ไม่พบข้อความหรือห้องปลายทาง ลองใหม่อีกครั้ง');
+    if (!channelId) {
+      return ephemeral('ไม่พบห้องปลายทาง ลองใหม่อีกครั้ง');
+    }
+    if (!messageContent && !attachment) {
+      return ephemeral('ต้องใส่ข้อความหรือแนบรูปอย่างน้อยอย่างหนึ่ง');
+    }
+
+    const payload = {
+      content: messageContent ?? '',
+      // กัน /send @everyone ถูกใช้ก่อกวน — ข้อความยังแสดงตัวอักษรปกติแต่ไม่ ping ใคร
+      allowed_mentions: { parse: [] },
+    };
+
+    const headers = { Authorization: `Bot ${botToken}` };
+    let body;
+
+    if (attachment) {
+      if (attachment.size > MAX_IMAGE_BYTES) {
+        return ephemeral(`ไฟล์ใหญ่เกินไป จำกัดที่ ${MAX_IMAGE_BYTES / 1024 / 1024} MB`);
+      }
+
+      let raw;
+      try {
+        // ต้องโหลดมาอัปโหลดใหม่ ส่ง URL ต่อเฉยๆ ไม่ได้ เพราะลิงก์ CDN ของ Discord
+        // ถูกเซ็นด้วย ex/is/hm แล้วหมดอายุ รูปจะกลายเป็นลิงก์เสียในภายหลัง
+        const download = await fetch(attachment.url, { signal: AbortSignal.timeout(2000) });
+        if (!download.ok) {
+          console.error(`Attachment download failed: ${download.status}`);
+          return ephemeral('โหลดรูปจาก Discord ไม่สำเร็จ ลองใหม่อีกครั้ง');
+        }
+        raw = Buffer.from(await download.arrayBuffer());
+      } catch (err) {
+        console.error('Attachment download error:', err);
+        return ephemeral('โหลดรูปไม่ทันเวลา ลองใช้ไฟล์ที่เล็กลง');
+      }
+
+      if (raw.length > MAX_IMAGE_BYTES) {
+        return ephemeral(`ไฟล์ใหญ่เกินไป จำกัดที่ ${MAX_IMAGE_BYTES / 1024 / 1024} MB`);
+      }
+
+      const type = detectImageType(raw);
+      if (!type) {
+        return ephemeral('แนบได้เฉพาะไฟล์ภาพ JPEG, PNG, WebP หรือ GIF เท่านั้น');
+      }
+
+      // ลบ EXIF และตั้งชื่อไฟล์ใหม่แบบสุ่ม ชื่อไฟล์เดิมก็บอกตัวตนคนส่งได้เหมือนกัน
+      const form = new FormData();
+      form.append('payload_json', JSON.stringify(payload));
+      form.append(
+        'files[0]',
+        new Blob([stripMetadata(raw, type)], { type }),
+        randomImageName(type),
+      );
+      body = form; // ห้ามตั้ง Content-Type เอง ต้องปล่อยให้ fetch ใส่ boundary ให้
+    } else {
+      headers['Content-Type'] = 'application/json';
+      body = JSON.stringify(payload);
     }
 
     try {
       const discordRes = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bot ${botToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content: messageContent,
-          // กัน /send @everyone ถูกใช้ก่อกวน — ข้อความยังแสดงตัวอักษรปกติแต่ไม่ ping ใคร
-          allowed_mentions: { parse: [] },
-        }),
+        headers,
+        body,
       });
 
       if (!discordRes.ok) {
@@ -130,7 +185,7 @@ export async function POST(request) {
         return ephemeral(`ส่งไม่สำเร็จ (error ${discordRes.status})`);
       }
 
-      return ephemeral('ส่งข้อความแบบไม่ระบุตัวตนเรียบร้อยแล้ว!');
+      return ephemeral('ส่งแบบไม่ระบุตัวตนเรียบร้อยแล้ว!');
     } catch (err) {
       console.error('Error sending message:', err);
       return ephemeral('ส่งไม่สำเร็จ เกิดข้อผิดพลาดที่เซิร์ฟเวอร์');

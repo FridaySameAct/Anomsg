@@ -14,14 +14,22 @@ const commands = [
   {
     name: 'send',
     description: 'ส่งข้อความแบบไม่ระบุตัวตน',
+    // ทั้งสอง option ไม่บังคับ แต่ handler จะปฏิเสธถ้าไม่ใส่มาสักอย่าง
+    // เพื่อให้ส่งเฉพาะรูปโดยไม่มีข้อความก็ได้
     options: [
       {
         name: 'message',
         type: 3, // String
         description: 'ข้อความที่คุณต้องการส่ง',
-        required: true,
+        required: false,
         min_length: 1,
         max_length: 2000, // เพดานความยาวข้อความของ Discord
+      },
+      {
+        name: 'image',
+        type: 11, // Attachment
+        description: 'รูปที่ต้องการแนบ (ระบบจะลบ EXIF และชื่อไฟล์เดิมทิ้งให้)',
+        required: false,
       },
     ],
   },
