@@ -8,7 +8,15 @@
 </head>
 <body>
 <main>
-  <section id="login">
+  <!-- ทุก view ซ่อนไว้จนกว่า /api/me จะตอบ ไม่งั้นคนที่ล็อกอินอยู่แล้วจะเห็นปุ่ม login
+       ค้างอยู่ตลอดช่วงที่รอ request แล้วเผลอกดจนถูกพาไปหน้า OAuth ซ้ำโดยไม่จำเป็น -->
+  <p id="loading">กำลังตรวจสอบการเข้าสู่ระบบ…</p>
+
+  <!-- อยู่นอก #app เพราะ error ที่เกิดตอนเรียก /api/me ครั้งแรกต้องแสดงได้
+       ทั้งที่ยังไม่รู้ว่าจะเข้า view ไหน -->
+  <p id="error" role="alert" hidden></p>
+
+  <section id="login" hidden>
     <h1>Anomsg Tasks</h1>
     <p>เข้าสู่ระบบด้วย Discord เพื่อจัดการงานของเซิร์ฟเวอร์</p>
     <button id="login-btn">Login with Discord</button>
@@ -28,8 +36,6 @@
       <span id="who"></span>
       <button id="logout-btn">ออก</button>
     </header>
-
-    <p id="error" role="alert" hidden></p>
 
     <nav>
       <button data-filter="all" aria-pressed="true">ทั้งหมด</button>

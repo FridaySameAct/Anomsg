@@ -98,6 +98,10 @@ header h1 { flex: 0 0 100%; }
 #who::before { content: "@"; opacity: .6; }
 #logout-btn { min-height: 36px; padding: 0 .8rem; font-size: .875rem; }
 
+/* --- สถานะกำลังตรวจสอบ session --- */
+#loading { padding: 3rem 1rem; color: var(--muted); text-align: center; }
+#loading[hidden] { display: none; }
+
 /* --- แถบ error --- */
 /* [hidden] ของเบราว์เซอร์เป็น display:none ที่ specificity ต่ำกว่า #error
    ถ้าไม่เขียนกฎนี้ แถบแดงจะโผล่ตลอดเวลาแม้ยังไม่มี error */

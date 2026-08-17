@@ -145,6 +145,7 @@ if (typeof document !== 'undefined') {
   // ด้านบน (นอก guard นี้) เพราะมันเป็นฟังก์ชันบริสุทธิ์ที่เทสต์เรียกตรงๆ ได้โดยไม่ต้องมี DOM
   function render() {
     const view = decideView({ guild: state.guild, me: state.me });
+    $('#loading').hidden = true; // รู้คำตอบแล้วว่าเป็น view ไหน เลิกแสดงสถานะกำลังตรวจสอบ
     $('#login').hidden = view !== 'login';
     $('#explain').hidden = view !== 'explain';
     $('#app').hidden = view !== 'app';
@@ -201,5 +202,7 @@ if (typeof document !== 'undefined') {
   // ไม่ส่ง guild เข้า /api/me — endpoint นี้อ่าน guild จาก session cookie เท่านั้น
   // gid ที่ได้กลับมาใช้แค่เติม state.guild เผื่อผู้ใช้เปิดหน้านี้โดยไม่มี ?guild= ใน URL เลย (เช่น bookmark ไว้)
   api('/api/me').then((me) => { state.me = me; if (!state.guild && me) state.guild = me.gid; render(); })
-    .catch((err) => showError(err.message));
+    // ต้อง render() ต่อแม้ถามไม่สำเร็จ ไม่งั้นหน้าจะค้างที่ "กำลังตรวจสอบ" ตลอดไป
+    // me ยังเป็น null อยู่ decideView จึงพาไปหน้า login หรือหน้าอธิบายตามที่ควรเป็น
+    .catch((err) => { showError(err.message); render(); });
 }
