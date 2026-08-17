@@ -10,6 +10,7 @@ import {
   randomImageName,
   stripMetadata,
 } from '../lib/image.js';
+import { checkRateLimit } from '../lib/rate-limit.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 const DISCORD_EPOCH = 1420070400000;
@@ -106,6 +107,21 @@ export async function POST(request) {
     }
     if (!messageContent && !attachment) {
       return ephemeral('ต้องใส่ข้อความหรือแนบรูปอย่างน้อยอย่างหนึ่ง');
+    }
+
+    // เช็คก่อนโหลดรูป จะได้ไม่เสียเวลาและ bandwidth กับคำขอที่ยังไงก็ไม่ผ่าน
+    const limit = await checkRateLimit({
+      userId: interaction.member?.user?.id ?? interaction.user?.id,
+      channelId,
+      env: process.env,
+    });
+
+    if (!limit.allowed) {
+      return ephemeral(
+        limit.scope === 'user'
+          ? `ส่งถี่เกินไป รออีก ${limit.retryAfter} วินาทีแล้วลองใหม่`
+          : `ห้องนี้มีคนใช้ /send ถี่เกินไป รออีก ${limit.retryAfter} วินาที`,
+      );
     }
 
     const payload = {

@@ -45,8 +45,13 @@ const ATTACHMENT_URL = 'https://cdn.discordapp.com/ephemeral-attachments/1/2/pho
 let captured = null;
 let nextDiscordResponse = () => new Response('{"id":"123"}', { status: 200 });
 let nextDownload = () => new Response('', { status: 404 });
+let upstashCount = 1; // ค่าที่ INCR จะคืน ตั้งให้เกินลิมิตเพื่อทดสอบการบล็อก
 globalThis.fetch = async (url, init) => {
-  if (String(url).startsWith('https://cdn.discordapp.com/')) return nextDownload();
+  const target = String(url);
+  if (target.startsWith('https://fake.upstash.io')) {
+    return new Response(JSON.stringify([{ result: upstashCount }, { result: 1 }]), { status: 200 });
+  }
+  if (target.startsWith('https://cdn.discordapp.com/')) return nextDownload();
   captured = { url, init };
   return nextDiscordResponse();
 };
@@ -311,6 +316,54 @@ console.log('\n=== 8h. โหลดรูปไม่สำเร็จ -> ต�
   const json = await res.json();
   check('แจ้งว่าโหลดรูปไม่สำเร็จ', json.data.content.includes('โหลดรูป'), json.data?.content);
   check('ไม่ได้บอกว่าสำเร็จ', !json.data.content.includes('เรียบร้อย'), json.data?.content);
+}
+
+console.log('\n=== 8i. โดน rate limit -> ต้องไม่โพสต์ลงห้อง ===');
+{
+  process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io';
+  process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token';
+  captured = null;
+  upstashCount = 999;
+
+  const res = await POST(
+    signed({ type: 2, channel_id: '999', data: { name: 'send', options: [{ name: 'message', value: 'spam' }] } }),
+  );
+  const json = await res.json();
+  check('แจ้งว่าส่งถี่เกินไป', json.data.content.includes('ถี่เกินไป'), json.data?.content);
+  check('บอกเวลารอ', /\d+ วินาที/.test(json.data.content), json.data?.content);
+  check('ไม่โพสต์ลงห้อง', captured === null);
+  check('ยังเป็น ephemeral', json.data.flags === 64);
+}
+
+console.log('\n=== 8j. โดน rate limit ตอนแนบรูป -> ต้องไม่เสียเวลาโหลดรูป ===');
+{
+  captured = null;
+  upstashCount = 999;
+  let downloaded = false;
+  nextDownload = () => {
+    downloaded = true;
+    return new Response(jpegWithExif(), { status: 200 });
+  };
+
+  const res = await POST(
+    sendWithImage({ id: 'att1', url: ATTACHMENT_URL, size: 100, content_type: 'image/jpeg' }),
+  );
+  const json = await res.json();
+  check('ถูกบล็อก', json.data.content.includes('ถี่เกินไป'), json.data?.content);
+  check('ไม่โหลดรูปเลย', downloaded === false);
+}
+
+console.log('\n=== 8k. /ping ไม่ถูกจำกัดความถี่ ===');
+{
+  upstashCount = 999;
+  const snowflake = ((BigInt(Date.now()) - 1420070400000n) << 22n).toString();
+  const res = await POST(signed({ type: 2, id: snowflake, channel_id: '999', data: { name: 'ping' } }));
+  const json = await res.json();
+  check('ยังตอบ Pong ตามปกติ', json.data.content.startsWith('Pong!'), json.data?.content);
+
+  upstashCount = 1;
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  delete process.env.UPSTASH_REDIS_REST_TOKEN;
 }
 
 console.log('\n=== 9. body พัง แต่ลายเซ็นถูก -> 400 ไม่ใช่ crash ===');
