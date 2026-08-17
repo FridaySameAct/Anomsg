@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { clearCookie, readCookie, sessionCookie, signSession, verifySession } from '../lib/session.js';
 
 let pass = 0;
@@ -7,7 +8,13 @@ function check(name, cond, extra = '') {
   else { console.log(`  FAIL  ${name} ${extra}`); fail++; }
 }
 
-const SECRET = 'test-secret';
+const SECRET = '0'.repeat(32); // 32 chars minimum
+
+function makeToken(payload) {
+  const p = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = createHmac('sha256', SECRET).update(p).digest('base64url');
+  return `${p}.${sig}`;
+}
 
 console.log('\n=== เซ็นแล้วตรวจกลับได้ ===');
 {
@@ -26,7 +33,7 @@ console.log('\n=== แก้ payload แล้วต้องไม่ผ่า�
     .toString('base64url');
   check('payload ปลอมต้องไม่ผ่าน', verifySession(`${evil}.${sig}`, SECRET) === null);
   check('ลายเซ็นมั่วต้องไม่ผ่าน', verifySession(`${payload}.deadbeef`, SECRET) === null);
-  check('secret คนละตัวต้องไม่ผ่าน', verifySession(token, 'other-secret') === null);
+  check('secret คนละตัวต้องไม่ผ่าน', verifySession(token, '1'.repeat(32)) === null);
   check('ค่าเพี้ยนต้องไม่ crash', verifySession('ขยะ', SECRET) === null);
   check('ค่าว่างต้องไม่ผ่าน', verifySession('', SECRET) === null);
 }
@@ -52,6 +59,85 @@ console.log('\n=== อ่าน cookie จาก request ===');
   const req = new Request('https://x.test', { headers: { cookie: 'a=1; anomsg_session=xyz; b=2' } });
   check('อ่านค่าที่ต้องการได้', readCookie(req, 'anomsg_session') === 'xyz');
   check('ไม่มี cookie คืน null', readCookie(new Request('https://x.test'), 'anomsg_session') === null);
+}
+
+console.log('\n=== secret ว่างต้องถูกปฏิเสธ ===');
+{
+  try {
+    signSession({ uid: '123', name: 'x', gid: 'g1' }, '');
+    check('signSession ปฏิเสธ secret ว่าง', false);
+  } catch {
+    check('signSession ปฏิเสธ secret ว่าง', true);
+  }
+  check('verifySession ปฏิเสธ secret ว่าง', verifySession('token', '') === null);
+}
+
+console.log('\n=== secret สั้นเกินไป (< 32) ต้องถูกปฏิเสธ ===');
+{
+  try {
+    signSession({ uid: '123', name: 'x', gid: 'g1' }, 'short');
+    check('signSession ปฏิเสธ short secret', false);
+  } catch {
+    check('signSession ปฏิเสธ short secret', true);
+  }
+  check('verifySession ปฏิเสธ short secret', verifySession('token', 'short') === null);
+}
+
+console.log('\n=== payload ที่ขาด uid/name/gid ต้องไม่ผ่าน ===');
+{
+  check('payload ขาด uid ต้องไม่ผ่าน', verifySession(makeToken({ name: 'x', gid: 'g1', exp: 9e9 }), SECRET) === null);
+  check('payload ขาด name ต้องไม่ผ่าน', verifySession(makeToken({ uid: '1', gid: 'g1', exp: 9e9 }), SECRET) === null);
+  check('payload ขาด gid ต้องไม่ผ่าน', verifySession(makeToken({ uid: '1', name: 'x', exp: 9e9 }), SECRET) === null);
+  check('payload uid ว่าง ต้องไม่ผ่าน', verifySession(makeToken({ uid: '', name: 'x', gid: 'g1', exp: 9e9 }), SECRET) === null);
+}
+
+console.log('\n=== exp เป็น Infinity ต้องไม่ผ่าน ===');
+{
+  const p = Buffer.from(JSON.stringify({ uid: '1', name: 'x', gid: 'g1', exp: Infinity })).toString('base64url');
+  const sig = createHmac('sha256', SECRET).update(p).digest('base64url');
+  check('exp = Infinity ต้องไม่ผ่าน', verifySession(`${p}.${sig}`, SECRET) === null);
+}
+
+console.log('\n=== exp เกินกว่า max age ต้องไม่ผ่าน ===');
+{
+  const futureExp = Math.floor(Date.now() / 1000) + (8 * 24 * 60 * 60);
+  const p = Buffer.from(JSON.stringify({ uid: '1', name: 'x', gid: 'g1', exp: futureExp })).toString('base64url');
+  const sig = createHmac('sha256', SECRET).update(p).digest('base64url');
+  check('exp เกินกว่า 7 วัน ต้องไม่ผ่าน', verifySession(`${p}.${sig}`, SECRET) === null);
+}
+
+console.log('\n=== token ที่มีส่วน 3 ส่วนขึ้นไป ต้องไม่ผ่าน ===');
+{
+  const token = signSession({ uid: '123', name: 'x', gid: 'g1' }, SECRET);
+  check('token + .junk ต้องไม่ผ่าน', verifySession(token + '.junk', SECRET) === null);
+}
+
+console.log('\n=== cookie ซ้ำต้องไม่ผ่าน ===');
+{
+  const req = new Request('https://x.test', { headers: { cookie: 'anomsg_session=first; anomsg_session=second' } });
+  check('cookie ซ้ำต้องคืน null', readCookie(req, 'anomsg_session') === null);
+}
+
+console.log('\n=== sessionCookie ต้องปฏิเสธค่า invalid ===');
+{
+  try {
+    sessionCookie('abc;def');
+    check('sessionCookie ปฏิเสธ ; ในค่า', false);
+  } catch {
+    check('sessionCookie ปฏิเสธ ; ในค่า', true);
+  }
+  try {
+    sessionCookie('abc\r\ndef');
+    check('sessionCookie ปฏิเสธ CR/LF ในค่า', false);
+  } catch {
+    check('sessionCookie ปฏิเสธ CR/LF ในค่า', true);
+  }
+  try {
+    sessionCookie('abc,def');
+    check('sessionCookie ปฏิเสธ comma ในค่า', false);
+  } catch {
+    check('sessionCookie ปฏิเสธ comma ในค่า', true);
+  }
 }
 
 console.log(`\n----------------------------\nPASS: ${pass}   FAIL: ${fail}\n`);
