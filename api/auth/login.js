@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { authorizeUrl } from '../../lib/oauth.js';
 
-const STATE_COOKIE = 'anomsg_oauth';
+// __Host- บังคับให้ browser ยอมรับ cookie นี้เฉพาะกรณี Secure + Path=/ + ไม่มี Domain เท่านั้น
+// กัน sibling-subdomain ตั้ง cookie ข้ามโดเมนย่อยมายัด state ปลอมใส่ victim ได้ (session fixation ผ่าน state)
+const STATE_COOKIE = '__Host-anomsg_oauth';
 
 export function GET(request) {
   const guildId = new URL(request.url).searchParams.get('guild') ?? '';
