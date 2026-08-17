@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Discord bot ส่งข้อความแบบไม่ระบุตัวตน รันเป็น Vercel Function",
   "scripts": {
-    "register": "node register.js"
+    "register": "node register.js",
+    "test": "node test/interactions.test.mjs"
   },
   "keywords": [],
   "author": "",

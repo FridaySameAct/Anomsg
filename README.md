@@ -75,6 +75,16 @@ https://<ชื่อโปรเจกต์>.vercel.app/api/interactions
 > อย่าใช้ URL ของ preview deployment ที่มีตัวเลขต่อท้าย เพราะ Hobby plan ล็อก preview URL
 > ไว้ด้วย Vercel Authentication ทำให้ Discord ยิงเข้าไม่ถึงและบันทึกไม่ผ่าน
 
+## ทดสอบ
+
+```bash
+npm test
+```
+
+ชุดทดสอบสร้าง Ed25519 keypair ขึ้นมาเซ็นจริงแล้วเรียก handler ตรงๆ ไม่ต้องใช้ token
+หรือต่อเน็ต ครอบคลุมทั้ง PING/PONG, ลายเซ็นผิดต้องได้ 401, `/send` สำเร็จ,
+กรณี Discord ตอบ error และกรณี env var หาย
+
 ## แก้ปัญหาที่เจอบ่อย
 
 **Discord ขึ้น "interactions endpoint url could not be verified"**
