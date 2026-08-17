@@ -12,8 +12,11 @@ function check(name, cond, extra = '') {
 function fakeRepo(seed = []) {
   let rows = seed.map((r) => ({ ...r }));
   let nextId = rows.length + 1;
+  // เก็บ patch ที่ updateById ได้รับจริงทุกครั้ง ไว้เทสต์ชั้น whitelist โดยตรงที่จุดต่อกับ repo
+  // ไม่ใช่แค่ดูผลลัพธ์ปลายทางหลัง Object.assign เพราะนั่นเทสต์รวมทั้งสองชั้นพร้อมกัน
+  const updateCalls = [];
   return {
-    rows: () => rows,
+    updateCalls: () => updateCalls,
     async findByGuild(guildId) { return rows.filter((r) => r.guildId === guildId); },
     async findByAssignee(guildId, actorId) {
       return rows.filter((r) => r.guildId === guildId && r.assignee === actorId);
@@ -21,6 +24,7 @@ function fakeRepo(seed = []) {
     async findById(id) { return rows.find((r) => r.id === id) ?? null; },
     async insert(doc) { const row = { id: String(nextId++), ...doc }; rows.push(row); return row; },
     async updateById(id, patch) {
+      updateCalls.push({ id, patch });
       const row = rows.find((r) => r.id === id);
       Object.assign(row, patch);
       return row;
@@ -104,6 +108,8 @@ console.log('\n=== ข้ามเซิร์ฟเวอร์ไม่ได�
   const service = createTasksService(seeded());
   await expectError(() => service.updateTask({ taskId: '2', guildId: GUILD, actorId: OWNER, patch: { done: true } }),
     NotFoundError, 'แก้ task ของ guild อื่นไม่ได้แม้เป็นเจ้าของ');
+  await expectError(() => service.deleteTask({ taskId: '2', guildId: GUILD, actorId: OWNER }),
+    NotFoundError, 'ลบ task ของ guild อื่นไม่ได้แม้เป็นเจ้าของ');
   const list = await service.listTasks({ guildId: GUILD });
   check('list เห็นเฉพาะ guild ตัวเอง', list.length === 1 && list[0].id === '1', JSON.stringify(list.map((t) => t.id)));
 }
@@ -118,6 +124,15 @@ console.log('\n=== PATCH ต้องรับเฉพาะฟิลด์ท�
   check('name แก้ได้', row.name === 'ชื่อใหม่');
   check('createdBy แก้ไม่ได้ (กันยึดสิทธิ์)', row.createdBy === OWNER, row.createdBy);
   check('guildId แก้ไม่ได้ (กันย้ายข้ามเซิร์ฟเวอร์)', row.guildId === GUILD, row.guildId);
+
+  // เช็คตรงจุดที่ patch วิ่งเข้า repo เลย ไม่ใช่แค่ผลลัพธ์ปลายทางหลัง persist
+  // เพื่อยืนยันชั้น whitelist (EDITABLE loop) เอง ไม่ใช่แค่พึ่ง cleanFields ชั้นเดียว
+  const calls = repo.updateCalls();
+  check('เรียก updateById แค่ครั้งเดียว', calls.length === 1, String(calls.length));
+  const sentPatch = calls[0].patch;
+  check('patch ที่ยิงเข้า repo ไม่มี createdBy', !('createdBy' in sentPatch), JSON.stringify(sentPatch));
+  check('patch ที่ยิงเข้า repo ไม่มี guildId', !('guildId' in sentPatch), JSON.stringify(sentPatch));
+  check('patch ที่ยิงเข้า repo ไม่มี id', !('id' in sentPatch), JSON.stringify(sentPatch));
 }
 
 console.log('\n=== task ที่ assign ให้เรา ===');
