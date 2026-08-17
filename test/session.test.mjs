@@ -80,22 +80,27 @@ console.log('\n=== secret สั้นเกินไป (< 32) ต้องถ�
   } catch {
     check('signSession ปฏิเสธ short secret', true);
   }
-  check('verifySession ปฏิเสธ short secret', verifySession('token', 'short') === null);
+  // Sign with valid secret, then verify with short secret
+  const validToken = signSession({ uid: '123', name: 'x', gid: 'g1' }, SECRET);
+  check('verifySession ปฏิเสธ short secret', verifySession(validToken, 'short') === null);
 }
 
 console.log('\n=== payload ที่ขาด uid/name/gid ต้องไม่ผ่าน ===');
 {
-  check('payload ขาด uid ต้องไม่ผ่าน', verifySession(makeToken({ name: 'x', gid: 'g1', exp: 9e9 }), SECRET) === null);
-  check('payload ขาด name ต้องไม่ผ่าน', verifySession(makeToken({ uid: '1', gid: 'g1', exp: 9e9 }), SECRET) === null);
-  check('payload ขาด gid ต้องไม่ผ่าน', verifySession(makeToken({ uid: '1', name: 'x', exp: 9e9 }), SECRET) === null);
-  check('payload uid ว่าง ต้องไม่ผ่าน', verifySession(makeToken({ uid: '', name: 'x', gid: 'g1', exp: 9e9 }), SECRET) === null);
+  const validExp = Math.floor(Date.now() / 1000) + 3600;
+  check('payload ขาด uid ต้องไม่ผ่าน', verifySession(makeToken({ name: 'x', gid: 'g1', exp: validExp }), SECRET) === null);
+  check('payload ขาด name ต้องไม่ผ่าน', verifySession(makeToken({ uid: '1', gid: 'g1', exp: validExp }), SECRET) === null);
+  check('payload ขาด gid ต้องไม่ผ่าน', verifySession(makeToken({ uid: '1', name: 'x', exp: validExp }), SECRET) === null);
+  check('payload uid ว่าง ต้องไม่ผ่าน', verifySession(makeToken({ uid: '', name: 'x', gid: 'g1', exp: validExp }), SECRET) === null);
 }
 
 console.log('\n=== exp เป็น Infinity ต้องไม่ผ่าน ===');
 {
-  const p = Buffer.from(JSON.stringify({ uid: '1', name: 'x', gid: 'g1', exp: Infinity })).toString('base64url');
+  // JSON.stringify(Infinity) becomes null, so encode literal 1e999 as raw JSON text
+  const rawJson = '{"uid":"1","name":"x","gid":"g1","exp":1e999}';
+  const p = Buffer.from(rawJson).toString('base64url');
   const sig = createHmac('sha256', SECRET).update(p).digest('base64url');
-  check('exp = Infinity ต้องไม่ผ่าน', verifySession(`${p}.${sig}`, SECRET) === null);
+  check('exp = 1e999 (Infinity) ต้องไม่ผ่าน', verifySession(`${p}.${sig}`, SECRET) === null);
 }
 
 console.log('\n=== exp เกินกว่า max age ต้องไม่ผ่าน ===');
