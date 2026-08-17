@@ -1,13 +1,19 @@
 import { InteractionType, InteractionResponseType, verifyKey } from 'discord-interactions';
-import { PING, SEND } from '../lib/commands.js';
+import { MYTASK, PING, SEND, TASK, WEB } from '../lib/commands.js';
 import { ephemeral } from '../lib/discord.js';
+import { handleMyTask } from '../lib/mytask.js';
 import { handlePing } from '../lib/ping.js';
 import { handleSend } from '../lib/send.js';
+import { handleTask } from '../lib/task.js';
+import { handleWeb } from '../lib/web.js';
 
 // เพิ่มคำสั่งใหม่ = เพิ่ม definition ใน lib/commands.js แล้วมาผูก handler ตรงนี้
 const HANDLERS = {
   [SEND]: handleSend,
   [PING]: handlePing,
+  [WEB]: handleWeb,
+  [MYTASK]: handleMyTask,
+  [TASK]: handleTask,
 };
 
 // Discord เรียก GET ตอนเช็คว่า endpoint มีชีวิตอยู่ไหม

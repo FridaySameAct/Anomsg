@@ -73,11 +73,19 @@ console.log('\n=== ทุกคำสั่งที่ประกาศไว�
   globalThis.fetch = async () => new Response('{"id":"1"}', { status: 200 });
 
   for (const command of COMMAND_DEFINITIONS) {
+    // คำสั่งที่มี subcommand (เช่น /task) ต้องส่ง subcommand แรกไปด้วย ไม่งั้นตกไปที่
+    // กิ่ง "ไม่รู้จักคำสั่งย่อยนี้" ของ handler เอง ซึ่งบังเอิญมีคำว่า "ไม่รู้จักคำสั่ง" ทับกับ
+    // ข้อความ router ตอนไม่มี handler เลย ทำให้เช็คผ่านผิดๆ
+    const firstSub = (command.options ?? []).find((o) => o.type === 1);
+    const data = firstSub
+      ? { name: command.name, options: [{ name: firstSub.name, type: 1, options: [] }] }
+      : { name: command.name };
     const body = JSON.stringify({
       type: 2,
       id: '1',
       channel_id: '999',
-      data: { name: command.name },
+      guild_id: 'g1',
+      data,
     });
     const timestamp = '1700000000';
     const sig = edSign(null, Buffer.from(timestamp + body, 'utf8'), privateKey).toString('hex');
@@ -95,6 +103,15 @@ console.log('\n=== ทุกคำสั่งที่ประกาศไว�
       json.data?.content,
     );
   }
+}
+
+console.log('\n=== คำสั่ง task ต้องปิดตัวเองเมื่อยังไม่ตั้ง MONGODB_URI ===');
+{
+  delete process.env.MONGODB_URI;
+  const { handleWeb } = await import('../lib/web.js');
+  const res = handleWeb({ interaction: { guild_id: 'g1' }, env: { PUBLIC_BASE_URL: 'https://x.test' } });
+  const json = await res.json();
+  check('/web แจ้งว่ายังไม่เปิดใช้งาน', json.data.content.includes('ยังไม่ได้เปิดใช้งาน'), json.data?.content);
 }
 
 console.log(`\n----------------------------\nPASS: ${pass}   FAIL: ${fail}\n`);
