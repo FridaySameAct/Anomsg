@@ -80,9 +80,16 @@ console.log('\n=== secret สั้นเกินไป (< 32) ต้องถ�
   } catch {
     check('signSession ปฏิเสธ short secret', true);
   }
-  // Sign with valid secret, then verify with short secret
-  const validToken = signSession({ uid: '123', name: 'x', gid: 'g1' }, SECRET);
-  check('verifySession ปฏิเสธ short secret', verifySession(validToken, 'short') === null);
+  // สำคัญ: ถ้าเซ็นด้วย SECRET (ยาวพอ) แล้วตรวจด้วย secret สั้น ลายเซ็นจะไม่ตรงอยู่แล้ว
+  // ทำให้ timingSafeEqual ปฏิเสธไปก่อน guard ความยาว secret จะได้ทำงาน — เทสต์แบบนั้นไม่ pin guard จริง
+  // ต้องจำลองผู้โจมตี: ปลอม token ด้วย secret สั้นตัวเดียวกันทั้งสองฝั่ง (เซ็นและตรวจ)
+  // ลายเซ็นจะ "ตรง" เป๊ะ มีแต่ guard ความยาว secret เท่านั้นที่ปฏิเสธได้
+  const SHORT_SECRET = 'short';
+  const forgedPayload = Buffer.from(JSON.stringify({ uid: 'attacker', name: 'evil', gid: 'g1', exp: Math.floor(Date.now() / 1000) + 3600 }))
+    .toString('base64url');
+  const forgedSig = createHmac('sha256', SHORT_SECRET).update(forgedPayload).digest('base64url');
+  const forgedToken = `${forgedPayload}.${forgedSig}`;
+  check('verifySession ปฏิเสธ short secret แม้ลายเซ็นตรง', verifySession(forgedToken, SHORT_SECRET) === null);
 }
 
 console.log('\n=== payload ที่ขาด uid/name/gid ต้องไม่ผ่าน ===');
@@ -94,13 +101,24 @@ console.log('\n=== payload ที่ขาด uid/name/gid ต้องไม่
   check('payload uid ว่าง ต้องไม่ผ่าน', verifySession(makeToken({ uid: '', name: 'x', gid: 'g1', exp: validExp }), SECRET) === null);
 }
 
-console.log('\n=== exp เป็น Infinity ต้องไม่ผ่าน ===');
+console.log('\n=== exp ที่ไม่ใช่ตัวเลขจำกัด ต้องไม่ผ่าน ===');
 {
-  // JSON.stringify(Infinity) becomes null, so encode literal 1e999 as raw JSON text
+  // exp = 1e999 กลายเป็น Infinity ตอน JSON.parse แต่ก็ยังโดน bound check (exp > now+MAX+60) จับอยู่ดี
+  // เพราะ Infinity > ตัวเลขจำกัดใดๆ เป็น true เสมอ — เทสต์นี้ยังต้องผ่านเพื่อกันการถดถอย (defense-in-depth)
+  // แต่ "ไม่ได้" พิสูจน์ว่า Number.isFinite ทำงานจริง เพราะลบ Number.isFinite ออกเทสต์นี้ก็ยังผ่าน
   const rawJson = '{"uid":"1","name":"x","gid":"g1","exp":1e999}';
   const p = Buffer.from(rawJson).toString('base64url');
   const sig = createHmac('sha256', SECRET).update(p).digest('base64url');
   check('exp = 1e999 (Infinity) ต้องไม่ผ่าน', verifySession(`${p}.${sig}`, SECRET) === null);
+
+  // เทสต์ที่ pin Number.isFinite จริง: exp เป็นสตริงที่ไม่ใช่ตัวเลข (เช่น "abc")
+  // การเทียบ 'abc' < now และ 'abc' > (now+MAX+60) ทั้งคู่ได้ false (JS แปลง 'abc' เป็น NaN แล้ว NaN
+  // เทียบกับอะไรก็ false เสมอ) จึงหลุด bound check ไปได้ทั้งสองข้าง — มีแต่ Number.isFinite เท่านั้น
+  // ที่จับได้ ไม่มีทาง encode NaN ผ่าน JSON ได้ตรงๆ (ไม่ใช่ syntax ที่ JSON รองรับ) สตริงจึงเป็นทางเดียว
+  // ที่จะสร้าง input จริงที่หลบ bound check แต่โดน Number.isFinite จับ
+  const nonNumericExp = Buffer.from(JSON.stringify({ uid: '1', name: 'x', gid: 'g1', exp: 'abc' })).toString('base64url');
+  const nonNumericSig = createHmac('sha256', SECRET).update(nonNumericExp).digest('base64url');
+  check('exp เป็นสตริงไม่ใช่ตัวเลข ต้องไม่ผ่าน', verifySession(`${nonNumericExp}.${nonNumericSig}`, SECRET) === null);
 }
 
 console.log('\n=== exp เกินกว่า max age ต้องไม่ผ่าน ===');
