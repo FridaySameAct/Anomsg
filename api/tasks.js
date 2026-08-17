@@ -1,22 +1,15 @@
-import { errorResponse, requireSession, unauthorized } from '../lib/api-helpers.js';
-import { isTasksEnabled } from '../lib/db.js';
+import { context, errorResponse, jsonNoStore, parseJsonBody, requireFound } from '../lib/api-helpers.js';
 import { getTasksService } from '../lib/tasks-repo.js';
 
-// guild มาจาก session เสมอ ไม่รับจาก query string
-// ไม่งั้นคนที่ล็อกอิน guild A จะยิง ?guild=B เพื่อดูงานของเซิร์ฟเวอร์อื่นได้
-function context(request) {
-  if (!isTasksEnabled()) return { error: Response.json({ error: 'ระบบ task ยังไม่เปิดใช้งาน' }, { status: 503 }) };
-  const session = requireSession(request);
-  if (!session) return { error: unauthorized() };
-  return { session };
-}
+// context() (lib/api-helpers.js) คือแหล่งเดียวที่ดึง guild/actor — มาจาก session เสมอ ไม่รับจาก query
+// string ไม่งั้นคนที่ล็อกอิน guild A จะยิง ?guild=B เพื่อดูงานของเซิร์ฟเวอร์อื่นได้
 
 export async function GET(request) {
   const { session, error } = context(request);
   if (error) return error;
   try {
     const service = await getTasksService();
-    return Response.json(await service.listTasks({ guildId: session.gid }));
+    return jsonNoStore(await service.listTasks({ guildId: session.gid }));
   } catch (err) { return errorResponse(err); }
 }
 
@@ -25,9 +18,9 @@ export async function POST(request) {
   if (error) return error;
   try {
     const service = await getTasksService();
-    const data = await request.json();
+    const data = await parseJsonBody(request);
     const task = await service.createTask({ guildId: session.gid, actorId: session.uid, data });
-    return Response.json(task, { status: 201 });
+    return jsonNoStore(task, { status: 201 });
   } catch (err) { return errorResponse(err); }
 }
 
@@ -37,9 +30,9 @@ export async function PATCH(request) {
   try {
     const service = await getTasksService();
     const taskId = new URL(request.url).searchParams.get('id');
-    const patch = await request.json();
+    const patch = await parseJsonBody(request);
     const task = await service.updateTask({ taskId, guildId: session.gid, actorId: session.uid, patch });
-    return Response.json(task);
+    return jsonNoStore(requireFound(task));
   } catch (err) { return errorResponse(err); }
 }
 
