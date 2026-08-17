@@ -1,16 +1,7 @@
 import { ForbiddenError } from '../../lib/errors.js';
 import { completeLogin } from '../../lib/oauth.js';
-import { readCookie, sessionCookie, signSession } from '../../lib/session.js';
-
-// __Host- บังคับให้ browser ยอมรับ cookie นี้เฉพาะกรณี Secure + Path=/ + ไม่มี Domain เท่านั้น
-// กัน sibling-subdomain ตั้ง cookie ข้ามโดเมนย่อยมายัด state ปลอมใส่ victim ได้ (session fixation ผ่าน state)
-const STATE_COOKIE = '__Host-anomsg_oauth';
-
-// state เดินทางผ่าน query string จึงหลุดไป browser history / Referer ของหน้า error / edge log ได้
-// ต้องเคลียร์ cookie นี้ทุก terminal path ไม่ใช่แค่ทาง success ไม่งั้นมันจะ replay ซ้ำได้ตลอด 600 วิที่เหลือ
-function clearStateCookie() {
-  return `${STATE_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
-}
+import { SNOWFLAKE } from '../../lib/discord.js';
+import { STATE_COOKIE, clearStateCookie, readCookie, sessionCookie, signSession } from '../../lib/session.js';
 
 export async function GET(request) {
   const url = new URL(request.url);
@@ -28,7 +19,7 @@ export async function GET(request) {
   const guildId = state.split('.')[1];
   // ห้ามเชื่อ guildId ที่ round-trip ผ่าน cookie เฉยๆ แค่เพราะ state ตรงกัน ต้องเช็ครูปแบบซ้ำเหมือนตอน login
   // (เช่น cookie ถูกยัดข้ามโดเมนย่อยมาก่อน __Host- จะมีผล หรือ state ถูกประกอบขึ้นเองแบบผิดรูป)
-  if (!/^\d{17,20}$/.test(guildId)) {
+  if (!SNOWFLAKE.test(guildId)) {
     return new Response('guild ไม่ถูกต้อง', {
       status: 400,
       headers: { 'Set-Cookie': clearStateCookie() },

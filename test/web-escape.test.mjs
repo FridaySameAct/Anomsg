@@ -1,6 +1,6 @@
 // ยืนยันว่าชื่อและรายละเอียดของ task ถูกใส่เข้า DOM แบบข้อความล้วน ไม่ใช่ HTML
 // buildTaskRow เป็นฟังก์ชันบริสุทธิ์ (ไม่แตะ DOM) จึงเรียกตรงๆ ใน Node ได้โดยไม่ต้องมี browser/jsdom
-import { buildTaskRow } from '../public/app.js';
+import { buildTaskRow, decideView } from '../public/app.js';
 
 let pass = 0;
 let fail = 0;
@@ -80,6 +80,22 @@ console.log('\n=== dueText: แปลงวันที่เฉพาะเม�
     { canEdit: false },
   );
   check('ไม่มี dueDate -> dueText ว่าง', noDue.dueText === '');
+}
+
+// สเปคข้อ 9: เปิดเว็บโดยไม่มี ?guild= และไม่มี session ต้องโชว์หน้าอธิบาย ไม่ใช่ตกไปที่ปุ่ม login เฉยๆ
+// (ซึ่งเดิมกดแล้วไปเจอ 400 ดิบของ api/auth/login.js เพราะไม่มี guild ให้ส่ง)
+console.log('\n=== decideView: ตัดสิน section ที่ควรโชว์จาก guild/session ===');
+{
+  check('มี session ที่ใช้ได้ -> app แม้ไม่มี guild ใน URL (ใช้ gid จาก session แทน)',
+    decideView({ guild: null, me: { uid: '1', name: 'x', gid: 'g1' } }) === 'app');
+  check('มี session ที่ใช้ได้ -> app แม้มี guild ใน URL ด้วย',
+    decideView({ guild: 'g2', me: { uid: '1', name: 'x', gid: 'g1' } }) === 'app');
+  check('ไม่มี session แต่มี guild ใน URL -> login',
+    decideView({ guild: 'g1', me: null }) === 'login');
+  check('ไม่มี session และไม่มี guild เลย -> explain (บุ๊กมาร์กหน้าแรก หรือ cookie พัง/หมดอายุ)',
+    decideView({ guild: null, me: null }) === 'explain');
+  check('guild เป็น string ว่าง (เช่น ?guild= เปล่าๆ) นับเป็นไม่มี guild -> explain',
+    decideView({ guild: '', me: null }) === 'explain');
 }
 
 console.log(`\n----------------------------\nPASS: ${pass}   FAIL: ${fail}\n`);

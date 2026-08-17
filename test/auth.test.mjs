@@ -1,6 +1,6 @@
 import { completeLogin } from '../lib/oauth.js';
 import { ForbiddenError } from '../lib/errors.js';
-import { SESSION_COOKIE, sessionCookie, signSession } from '../lib/session.js';
+import { STATE_COOKIE as REAL_STATE_COOKIE, SESSION_COOKIE, sessionCookie, signSession } from '../lib/session.js';
 
 let pass = 0;
 let fail = 0;
@@ -9,8 +9,14 @@ function check(name, cond, extra = '') {
   else { console.log(`  FAIL  ${name} ${extra}`); fail++; }
 }
 
-// ต้องตรงกับชื่อ cookie จริงใน api/auth/login.js, api/auth/callback.js, api/auth/logout.js
+// pin ค่าคงที่ไว้ตรงๆ อีกชั้น แยกจากของจริงที่ import มา (REAL_STATE_COOKIE จาก lib/session.js ซึ่ง
+// login.js/callback.js/logout.js ทั้งสามไฟล์ import มาจากจุดเดียวกันหลังรวมโค้ดซ้ำ) เพื่อกันไม่ให้ค่า
+// เปลี่ยนไปเงียบๆ โดยไม่มีเทสต์ไหนจับได้เลย
 const STATE_COOKIE = '__Host-anomsg_oauth';
+console.log('\n=== STATE_COOKIE ที่ export จาก lib/session.js ต้องตรงกับค่าที่ pin ไว้ ===');
+{
+  check('STATE_COOKIE ตรงกับค่าที่คาดไว้', REAL_STATE_COOKIE === STATE_COOKIE, REAL_STATE_COOKIE);
+}
 
 const ENV = {
   DISCORD_CLIENT_ID: 'app-1',

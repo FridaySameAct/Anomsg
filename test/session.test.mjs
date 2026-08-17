@@ -1,5 +1,8 @@
 import { createHmac } from 'node:crypto';
-import { clearCookie, readCookie, sessionCookie, signSession, verifySession } from '../lib/session.js';
+import {
+  SESSION_COOKIE, STATE_COOKIE, clearCookie, clearStateCookie,
+  readCookie, sessionCookie, signSession, verifySession,
+} from '../lib/session.js';
 
 let pass = 0;
 let fail = 0;
@@ -46,19 +49,37 @@ console.log('\n=== หมดอายุแล้วต้องไม่ผ่�
 
 console.log('\n=== รูปแบบ cookie ===');
 {
+  // __Host- คือด่านสำคัญ: กัน sibling-subdomain (เช่น *.vercel.app ตัวอื่น) ยัด cookie ชื่อเดียวกันมา
+  // ทับของจริงในเบราว์เซอร์ของเหยื่อได้ — browser ยอมรับ __Host- ก็ต่อเมื่อมี Secure + Path=/ + ไม่มี
+  // Domain เท่านั้น เทสต์นี้จึง pin ทั้งชื่อ cookie และแอตทริบิวต์ที่ __Host- บังคับพร้อมกัน
+  check('ชื่อ cookie มี __Host- prefix', SESSION_COOKIE === '__Host-anomsg_session', SESSION_COOKIE);
   const header = sessionCookie('abc');
+  check('ขึ้นต้นด้วยชื่อ __Host- ที่ถูกต้อง', header.startsWith(`${SESSION_COOKIE}=`), header);
   check('เป็น HttpOnly', header.includes('HttpOnly'));
   check('เป็น Secure', header.includes('Secure'));
   check('SameSite=Lax', header.includes('SameSite=Lax'));
+  check('Path=/ (ข้อบังคับของ __Host-)', header.includes('Path=/'), header);
+  check('ไม่มี Domain (ข้อบังคับของ __Host-)', !header.includes('Domain='), header);
   check('มีอายุ 7 วัน', header.includes('Max-Age=604800'), header);
   check('clearCookie ตั้งอายุเป็น 0', clearCookie().includes('Max-Age=0'));
+  check('clearCookie ใช้ชื่อ __Host- เดียวกับ sessionCookie', clearCookie().startsWith(`${SESSION_COOKIE}=`));
+}
+
+console.log('\n=== state cookie (ย้ายมารวมกับ session cookie ที่นี่ กันก็อปปี้แยก login/callback/logout) ===');
+{
+  check('ชื่อ cookie มี __Host- prefix', STATE_COOKIE === '__Host-anomsg_oauth', STATE_COOKIE);
+  const header = clearStateCookie();
+  check('clearStateCookie ใช้ชื่อ __Host- ที่ถูกต้อง', header.startsWith(`${STATE_COOKIE}=`), header);
+  check('clearStateCookie ตั้งอายุเป็น 0', header.includes('Max-Age=0'), header);
+  check('clearStateCookie ยังคง Path=/ (ข้อบังคับของ __Host-)', header.includes('Path=/'), header);
+  check('clearStateCookie ไม่มี Domain (ข้อบังคับของ __Host-)', !header.includes('Domain='), header);
 }
 
 console.log('\n=== อ่าน cookie จาก request ===');
 {
-  const req = new Request('https://x.test', { headers: { cookie: 'a=1; anomsg_session=xyz; b=2' } });
-  check('อ่านค่าที่ต้องการได้', readCookie(req, 'anomsg_session') === 'xyz');
-  check('ไม่มี cookie คืน null', readCookie(new Request('https://x.test'), 'anomsg_session') === null);
+  const req = new Request('https://x.test', { headers: { cookie: `a=1; ${SESSION_COOKIE}=xyz; b=2` } });
+  check('อ่านค่าที่ต้องการได้', readCookie(req, SESSION_COOKIE) === 'xyz');
+  check('ไม่มี cookie คืน null', readCookie(new Request('https://x.test'), SESSION_COOKIE) === null);
 }
 
 console.log('\n=== secret ว่างต้องถูกปฏิเสธ ===');
@@ -137,8 +158,8 @@ console.log('\n=== token ที่มีส่วน 3 ส่วนขึ้น�
 
 console.log('\n=== cookie ซ้ำต้องไม่ผ่าน ===');
 {
-  const req = new Request('https://x.test', { headers: { cookie: 'anomsg_session=first; anomsg_session=second' } });
-  check('cookie ซ้ำต้องคืน null', readCookie(req, 'anomsg_session') === null);
+  const req = new Request('https://x.test', { headers: { cookie: `${SESSION_COOKIE}=first; ${SESSION_COOKIE}=second` } });
+  check('cookie ซ้ำต้องคืน null', readCookie(req, SESSION_COOKIE) === null);
 }
 
 console.log('\n=== sessionCookie ต้องปฏิเสธค่า invalid ===');

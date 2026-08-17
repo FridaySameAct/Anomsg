@@ -1,5 +1,7 @@
+import mongoose from 'mongoose';
 import { context, errorResponse, jsonNoStore, parseJsonBody, requireFound } from '../lib/api-helpers.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../lib/errors.js';
+import { SESSION_COOKIE } from '../lib/session.js';
 
 let pass = 0;
 let fail = 0;
@@ -24,6 +26,25 @@ console.log('\n=== ไม่ส่งรายละเอียดภายใ�
   check('ยังมีข้อความให้ผู้ใช้อ่าน', typeof body.error === 'string' && body.error.length > 0);
 }
 
+// spec ข้อ 10: MONGODB_URI ตั้งไว้แต่ Atlas ต่อไม่ติด (ล่ม/เน็ตขาด) ต้องตอบ 503 ไม่ใช่ 500 ที่ปนกับ error
+// ที่ไม่คาดคิดจริงๆ — mongoose.Error.MongooseServerSelectionError คือ error class เดียวที่ mongoose.connect()
+// โยนตอนหา server ไม่เจอเลย ไม่ต้องต่อ Atlas จริงเพื่อจำลอง แค่สร้าง instance ของ error class จริงตรงๆ พอ
+console.log('\n=== DB ต่อไม่ติด (Atlas ล่ม) -> 503 ไม่ใช่ 500 ===');
+{
+  // ข้อความจำลองมี host/ip จริงปนอยู่ เหมือนที่ mongoose ใส่มาให้จริงๆ ตอน server selection ล้มเหลว
+  const dbErr = new mongoose.Error.MongooseServerSelectionError(
+    'connect ECONNREFUSED 10.0.0.1:27017, cluster0.abcde.mongodb.net',
+  );
+  const res = errorResponse(dbErr);
+  check('MongooseServerSelectionError -> 503 ไม่ใช่ 500', res.status === 503, res.status);
+  const body = await res.json();
+  check('ยังมีข้อความให้ผู้ใช้อ่าน', typeof body.error === 'string' && body.error.length > 0, body.error);
+  check('ไม่มี host/ip ของ DB หลุดออกไปใน body', !body.error.includes('10.0.0.1') && !body.error.includes('mongodb.net'), body.error);
+  // error ทั่วไปที่ไม่ใช่ connection failure ต้องยังตอบ 500 เหมือนเดิม ไม่ถูกจับเข้าเคส 503 ผิดๆ
+  check('error ธรรมดาที่ไม่ใช่ DB connection ยังตอบ 500 เหมือนเดิม (ไม่ได้เหมารวมเป็น 503)',
+    errorResponse(new Error('boom')).status === 500);
+}
+
 console.log('\n=== ข้อความของ error ที่ตั้งใจแสดง ต้องส่งถึงผู้ใช้ ===');
 {
   const body = await errorResponse(new ValidationError('ชื่องานต้องยาว 1-200 ตัวอักษร')).json();
@@ -43,7 +64,7 @@ console.log('\n=== route ต้องปฏิเสธก่อนแตะ DB 
   // ใช้ค่าปลอมแบบ ASCII (ไม่ใช่ 'ปลอม.ปลอม' ตามร่างเดิม) เพราะ Headers ของ undici บังคับ ByteString
   // (Latin-1 เท่านั้น) ตัวอักษรไทยมี code point เกิน 255 ทำให้ new Request() throw ก่อนแตะโค้ดที่จะทดสอบเลย
   const badCookie = new Request('https://x.test/api/tasks', {
-    headers: { cookie: 'anomsg_session=forged.forged' },
+    headers: { cookie: `${SESSION_COOKIE}=forged.forged` },
   });
   check('session ปลอม -> 401', (await tasks.GET(badCookie)).status === 401);
   check('POST ก็ต้องกัน', (await tasks.POST(noCookie)).status === 401);

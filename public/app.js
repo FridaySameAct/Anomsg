@@ -14,6 +14,19 @@ export function buildTaskRow(task, { canEdit }) {
   };
 }
 
+// ฟังก์ชันบริสุทธิ์เหมือน buildTaskRow ด้านบน ตัดสินว่าควรโชว์ section ไหนจากแค่ guild (จาก ?guild=
+// ใน URL) กับ me (ผลจาก GET /api/me — null ถ้ายังไม่ได้ล็อกอินหรือ session พัง/หมดอายุ) จึงเทสต์ได้
+// ตรงๆ ใน Node โดยไม่ต้องมี DOM เหมือนกัน
+// - มี session ที่ใช้ได้ (me) -> 'app' เสมอ แม้ URL จะไม่มี ?guild= (ใช้ gid จาก session แทน ตามสเปคข้อ 9
+//   "ถ้ามี session อยู่แล้วให้ใช้ gid จาก cookie เป็นค่าตั้งต้นแทน จะได้ไม่ต้องกลับไป Discord ทุกครั้ง")
+// - ไม่มี session แต่มี ?guild= (เช่น เพิ่งมาจากลิงก์ /web) -> 'login'
+// - ไม่มีทั้งคู่ (บุ๊กมาร์กหน้าแรกไว้ หรือ cookie ที่มีอยู่พังจน /api/me ตอบ 401) -> 'explain'
+export function decideView({ guild, me }) {
+  if (me) return 'app';
+  if (guild) return 'login';
+  return 'explain';
+}
+
 // ส่วนด้านล่างรันเฉพาะในเบราว์เซอร์ — กันไว้ด้วย guard นี้เพื่อให้ import ด้านบนปลอดภัยใน Node (ไม่มี DOM)
 if (typeof document !== 'undefined') {
   const params = new URLSearchParams(location.search);
@@ -128,10 +141,14 @@ if (typeof document !== 'undefined') {
     }
   }
 
+  // ดูคำอธิบายเต็มของ 3 สถานะที่ decideView() คืนได้ (login/explain/app) ที่ตัวฟังก์ชันเอง
+  // ด้านบน (นอก guard นี้) เพราะมันเป็นฟังก์ชันบริสุทธิ์ที่เทสต์เรียกตรงๆ ได้โดยไม่ต้องมี DOM
   function render() {
-    $('#login').hidden = Boolean(state.me);
-    $('#app').hidden = !state.me;
-    if (state.me) {
+    const view = decideView({ guild: state.guild, me: state.me });
+    $('#login').hidden = view !== 'login';
+    $('#explain').hidden = view !== 'explain';
+    $('#app').hidden = view !== 'app';
+    if (view === 'app') {
       $('#who').textContent = state.me.name; // ชื่อ Discord ก็เป็นข้อมูลผู้ใช้ ใส่ผ่าน textContent เหมือนกัน
       load();
     }
@@ -142,11 +159,17 @@ if (typeof document !== 'undefined') {
     location.href = `/api/auth/login?guild=${encodeURIComponent(state.guild ?? '')}`;
   });
 
-  $('#logout-btn').addEventListener('click', async () => {
+  // ใช้ร่วมกันทั้งปุ่มออกจากระบบในหน้าแอปปกติ (#logout-btn) และปุ่มในหน้าอธิบาย (#explain-logout-btn)
+  // ปุ่มหลังมีไว้ล้าง cookie ที่ค้าง/พัง (เช่นหมดอายุ หรือถูกยัดของปลอมทับ) ทั้งที่ฝั่ง client ยังไม่นับว่า
+  // ล็อกอินอยู่แล้ว (/api/me ตอบ 401 ไปแล้ว) ผู้ใช้จึงยังต้องมีทางล้าง cookie นั้นทิ้งได้เอง
+  async function doLogout() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
     state.me = null;
     render();
-  });
+  }
+
+  $('#logout-btn').addEventListener('click', doLogout);
+  $('#explain-logout-btn').addEventListener('click', doLogout);
 
   $('#add-form').addEventListener('submit', async (event) => {
     event.preventDefault();
