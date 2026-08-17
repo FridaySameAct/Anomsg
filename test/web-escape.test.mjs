@@ -1,6 +1,6 @@
 // ยืนยันว่าชื่อและรายละเอียดของ task ถูกใส่เข้า DOM แบบข้อความล้วน ไม่ใช่ HTML
 // buildTaskRow เป็นฟังก์ชันบริสุทธิ์ (ไม่แตะ DOM) จึงเรียกตรงๆ ใน Node ได้โดยไม่ต้องมี browser/jsdom
-import { buildTaskRow, decideView } from '../public/app.js';
+import { buildTaskRow, decideView, toDateInputValue } from '../public/app.js';
 
 let pass = 0;
 let fail = 0;
@@ -96,6 +96,33 @@ console.log('\n=== decideView: ตัดสิน section ที่ควรโ�
     decideView({ guild: null, me: null }) === 'explain');
   check('guild เป็น string ว่าง (เช่น ?guild= เปล่าๆ) นับเป็นไม่มี guild -> explain',
     decideView({ guild: '', me: null }) === 'explain');
+}
+
+console.log('\n=== toDateInputValue: ค่าเริ่มต้นของช่องวันที่ตอนกดแก้ ===');
+{
+  check('ไม่มีวันที่ -> ว่าง', toDateInputValue(null) === '' && toDateInputValue(undefined) === '');
+  check('วันที่พัง -> ว่าง ไม่ throw', toDateInputValue('ไม่ใช่วันที่') === '');
+
+  // ใช้เวลาท้องถิ่น ไม่ใช่ UTC — toISOString().slice(0,10) จะเลื่อนวันสำหรับคนฝั่งตะวันออกของ UTC
+  // (ไทย UTC+7: เที่ยงคืนวันที่ 20 ตามเวลาไทย = 17:00 วันที่ 19 ตาม UTC)
+  const local = new Date(2026, 7, 20, 0, 30);
+  check('ใช้วันตามเวลาท้องถิ่น', toDateInputValue(local) === '2026-08-20', toDateInputValue(local));
+  check('เดือน/วันเติมศูนย์ให้ครบ 2 หลัก', toDateInputValue(new Date(2026, 0, 5)) === '2026-01-05', toDateInputValue(new Date(2026, 0, 5)));
+}
+
+console.log('\n=== assigneeState: บอกความสัมพันธ์กับคนที่กำลังดู ไม่ใช่โชว์ id ดิบ ===');
+{
+  const base = { id: '1', name: 'งาน', description: '', done: false, dueDate: null };
+  const none = buildTaskRow({ ...base, assignee: null }, { canEdit: true, meId: 'me-1' });
+  const mine = buildTaskRow({ ...base, assignee: 'me-1' }, { canEdit: true, meId: 'me-1' });
+  const other = buildTaskRow({ ...base, assignee: 'someone-else' }, { canEdit: true, meId: 'me-1' });
+
+  check('ไม่มีผู้รับผิดชอบ -> none', none.assigneeState === 'none', none.assigneeState);
+  check('เป็นของเราเอง -> me', mine.assigneeState === 'me', mine.assigneeState);
+  check('เป็นของคนอื่น -> other', other.assigneeState === 'other', other.assigneeState);
+  check('ไม่รู้ว่าเราเป็นใคร -> ถือว่าเป็นของคนอื่น', buildTaskRow({ ...base, assignee: 'x' }, { canEdit: false }).assigneeState === 'other');
+  check('เก็บ assignee ดิบไว้ให้ตัวเลือก "คงเดิม" ใช้', other.assignee === 'someone-else', String(other.assignee));
+  check('id ดิบไม่ถูกเอาไปแสดงเป็นข้อความ', none.nameText === 'งาน' && !JSON.stringify(none).includes('someone-else'));
 }
 
 console.log(`\n----------------------------\nPASS: ${pass}   FAIL: ${fail}\n`);

@@ -1,13 +1,30 @@
 // คืนข้อมูลของแถวแบบบริสุทธิ์ ไม่แตะ DOM เพื่อให้เทสต์เรียกได้ใน Node โดยไม่ต้องมี DOM
 // ชื่อและรายละเอียดของ task มาจากผู้ใช้ ห้าม escape/ตัด/ประกอบเป็น HTML ที่นี่เด็ดขาด —
 // เก็บไว้เป็นข้อความล้วน แล้วให้ฝั่ง DOM ใส่ผ่าน textContent เท่านั้น (ดู renderRow ด้านล่าง)
-export function buildTaskRow(task, { canEdit }) {
+// แปลงวันที่เป็นรูปแบบที่ <input type="date"> รับได้ (yyyy-mm-dd)
+// ใช้ส่วนประกอบเวลาท้องถิ่น ไม่ใช่ toISOString() เพราะตัวหลังแปลงเป็น UTC ก่อน
+// ซึ่งทำให้วันเลื่อนไป 1 วันสำหรับคนที่อยู่ฝั่งตะวันออกของ UTC เช่นไทย
+export function toDateInputValue(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function buildTaskRow(task, { canEdit, meId = null }) {
+  const assignee = task.assignee ?? null;
   return {
     id: task.id,
     nameText: task.name, // ข้อความล้วน จะถูกใส่ผ่าน textContent
     descriptionText: task.description ?? '',
     done: Boolean(task.done),
     dueText: task.dueDate ? new Date(task.dueDate).toLocaleDateString('th-TH') : '',
+    dueValue: toDateInputValue(task.dueDate), // ค่าเริ่มต้นของช่องวันที่ตอนกดแก้
+    assignee,
+    // เว็บไม่รู้จักชื่อสมาชิกในเซิร์ฟเวอร์ (ต้องเปิด privileged intent เพิ่ม) จึงบอกได้แค่
+    // ความสัมพันธ์กับคนที่กำลังดูอยู่ ซึ่งเป็นข้อมูลที่มีประโยชน์กว่าการโชว์ id ดิบอยู่แล้ว
+    assigneeState: assignee === null ? 'none' : assignee === meId ? 'me' : 'other',
     canEdit,
     usesTextContent: true, // สัญญาว่าไม่มี HTML จากผู้ใช้
     html: null, // ห้ามมีค่า ห้ามประกอบ HTML จากข้อมูลผู้ใช้
@@ -94,14 +111,35 @@ if (typeof document !== 'undefined') {
       body.append(desc);
     }
 
-    const meta = document.createElement('span');
-    meta.className = 'meta';
-    meta.textContent = row.dueText ? `ครบ ${row.dueText}` : '';
-    if (row.dueText) body.append(meta);
+    const tags = document.createElement('span');
+    tags.className = 'tags';
+
+    if (row.dueText) {
+      const due = document.createElement('span');
+      due.className = 'meta';
+      due.textContent = `ครบ ${row.dueText}`;
+      tags.append(due);
+    }
+    if (row.assigneeState !== 'none') {
+      const who = document.createElement('span');
+      who.className = row.assigneeState === 'me' ? 'meta mine' : 'meta';
+      who.textContent = row.assigneeState === 'me' ? 'ของฉัน' : 'มอบหมายแล้ว';
+      tags.append(who);
+    }
+    if (tags.childElementCount > 0) body.append(tags);
 
     li.append(box, body);
 
     if (row.canEdit) {
+      const actions = document.createElement('span');
+      actions.className = 'actions';
+
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'edit-btn';
+      edit.textContent = 'แก้';
+      edit.addEventListener('click', () => li.replaceChildren(buildEditForm(row, li)));
+
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'delete';
@@ -115,9 +153,83 @@ if (typeof document !== 'undefined') {
         }
         load();
       });
-      li.append(del);
+
+      actions.append(edit, del);
+      li.append(actions);
     }
     return li;
+  }
+
+  // ฟอร์มแก้ไขในแถวเดิม เปิดจากปุ่ม "แก้" — เป็นทางเดียวที่ตั้ง description กับ dueDate ได้
+  // เพราะ /task add ใน Discord รับแค่ชื่องานกับผู้รับผิดชอบ
+  function buildEditForm(row, li) {
+    const form = document.createElement('form');
+    form.className = 'edit';
+
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.required = true;
+    name.maxLength = 200;
+    name.value = row.nameText; // .value ไม่ตีความ HTML จึงปลอดภัยเหมือน textContent
+    name.placeholder = 'ชื่องาน';
+
+    const description = document.createElement('textarea');
+    description.rows = 2;
+    description.maxLength = 2000;
+    description.value = row.descriptionText;
+    description.placeholder = 'รายละเอียด (ไม่บังคับ)';
+
+    const due = document.createElement('input');
+    due.type = 'date';
+    due.value = row.dueValue;
+
+    // เว็บมอบหมายได้แค่ "ตัวเอง" หรือ "ไม่ระบุ" เพราะไม่รู้จักรายชื่อสมาชิก
+    // ตัวเลือก "คงเดิม" จำเป็นเพื่อไม่ให้การแก้ชื่องานเผลอปลดคนอื่นออกจากงานไปด้วย
+    const who = document.createElement('select');
+    for (const [value, label] of [['', 'ไม่ระบุผู้รับผิดชอบ'], ['me', 'มอบหมายให้ฉัน']]) {
+      who.append(new Option(label, value));
+    }
+    if (row.assigneeState === 'other') who.append(new Option('คงผู้รับผิดชอบเดิม', 'keep'));
+    who.value = row.assigneeState === 'me' ? 'me' : row.assigneeState === 'other' ? 'keep' : '';
+
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.textContent = 'บันทึก';
+
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'ghost';
+    cancel.textContent = 'ยกเลิก';
+    cancel.addEventListener('click', () => li.replaceChildren(...renderRow(row).childNodes));
+
+    const buttons = document.createElement('div');
+    buttons.className = 'edit-actions';
+    buttons.append(save, cancel);
+
+    form.append(name, description, due, who, buttons);
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const assignee =
+        who.value === 'me' ? state.me.uid : who.value === 'keep' ? row.assignee : null;
+      try {
+        await api(`/api/tasks?id=${encodeURIComponent(row.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.value,
+            description: description.value,
+            dueDate: due.value || null,
+            assignee,
+          }),
+        });
+        clearError();
+      } catch (err) {
+        showError(err.message);
+      }
+      load();
+    });
+
+    return form;
   }
 
   async function load() {
@@ -137,7 +249,7 @@ if (typeof document !== 'undefined') {
       if (state.filter === 'done' && !task.done) continue;
       if (state.filter === 'all' && task.done) continue;
       const canEdit = task.createdBy === state.me.uid || task.assignee === state.me.uid;
-      list.append(renderRow(buildTaskRow(task, { canEdit })));
+      list.append(renderRow(buildTaskRow(task, { canEdit, meId: state.me.uid })));
     }
   }
 

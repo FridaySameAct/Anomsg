@@ -230,9 +230,12 @@ ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: col
   font-variant-numeric: tabular-nums;
 }
 
-/* ปุ่มลบเงียบไว้ก่อน ค่อยแดงตอนชี้ — การลบไม่ควรเป็นสิ่งที่สะดุดตาที่สุดในแถว */
-.task .delete {
-  flex-shrink: 0;
+.task .tags { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .15rem; }
+.task .meta.mine { background: var(--accent-soft); color: var(--accent); }
+
+/* ปุ่มในแถวเงียบไว้ก่อน ค่อยเด่นตอนชี้ — การลบไม่ควรเป็นสิ่งที่สะดุดตาที่สุดในแถว */
+.task .actions { display: flex; gap: .25rem; flex-shrink: 0; }
+.task .actions button {
   min-height: 36px;
   padding: 0 .7rem;
   border-color: transparent;
@@ -240,8 +243,28 @@ ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: col
   color: var(--muted);
   font-size: .875rem;
 }
-.task .delete:hover {
-  border-color: var(--danger);
-  background: var(--danger-bg);
-  color: var(--danger);
+.task .edit-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.task .delete:hover { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+
+/* --- ฟอร์มแก้ไขในแถว --- */
+.edit { display: flex; flex-direction: column; gap: .5rem; width: 100%; }
+.edit input, .edit textarea, .edit select {
+  width: 100%;
+  min-height: 44px;
+  padding: .5rem .75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
 }
+.edit textarea { resize: vertical; line-height: 1.5; }
+.edit input:focus, .edit textarea:focus, .edit select:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.edit-actions { display: flex; gap: .5rem; }
+.edit-actions button { flex: 1; }
+.edit-actions button[type="submit"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.edit-actions .ghost { background: transparent; }
