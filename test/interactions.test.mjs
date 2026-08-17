@@ -125,7 +125,27 @@ console.log('\n=== 7. คำสั่งที่ไม่รู้จัก -> 
   check('แจ้งไม่รู้จักคำสั่ง', json.data.content.includes('ไม่รู้จัก'), json.data?.content);
 }
 
-console.log('\n=== 8. body พัง แต่ลายเซ็นถูก -> 400 ไม่ใช่ crash ===');
+console.log('\n=== 8. /ping ===');
+{
+  captured = null;
+  // สร้าง snowflake id จากเวลาปัจจุบันแบบเดียวกับที่ Discord ทำ
+  const snowflake = ((BigInt(Date.now()) - 1420070400000n) << 22n).toString();
+  const res = await POST(signed({ type: 2, id: snowflake, channel_id: '999', data: { name: 'ping' } }));
+  const json = await res.json();
+  check('ตอบ Pong', json.data.content.startsWith('Pong!'), json.data?.content);
+  check('เป็น ephemeral', json.data.flags === 64, String(json.data?.flags));
+  check('แสดง latency เป็นตัวเลข ms', /\(\d+ ms\)/.test(json.data.content), json.data?.content);
+  check('ไม่ยิง Discord API (ไม่เปลืองโควตา)', captured === null, JSON.stringify(captured?.url));
+}
+
+console.log('\n=== 8b. /ping ที่ id พัง -> ยังตอบได้ ไม่ crash ===');
+{
+  const res = await POST(signed({ type: 2, id: 'ไม่ใช่ตัวเลข', channel_id: '999', data: { name: 'ping' } }));
+  const json = await res.json();
+  check('ยังตอบ Pong', json.data.content === 'Pong! 🏓', json.data?.content);
+}
+
+console.log('\n=== 9. body พัง แต่ลายเซ็นถูก -> 400 ไม่ใช่ crash ===');
 {
   const body = 'not json';
   const timestamp = '1700000000';
@@ -139,7 +159,7 @@ console.log('\n=== 8. body พัง แต่ลายเซ็นถูก -> 
   check('status 400', res.status === 400, `got ${res.status}`);
 }
 
-console.log('\n=== 9. ไม่มี env var -> 500 ไม่ใช่ปล่อยผ่าน ===');
+console.log('\n=== 10. ไม่มี env var -> 500 ไม่ใช่ปล่อยผ่าน ===');
 {
   const saved = process.env.DISCORD_TOKEN;
   delete process.env.DISCORD_TOKEN;

@@ -6,6 +6,17 @@ import {
 } from 'discord-interactions';
 
 const DISCORD_API = 'https://discord.com/api/v10';
+const DISCORD_EPOCH = 1420070400000;
+
+// ดึงเวลาที่ Discord สร้าง interaction ออกมาจาก snowflake id
+// เอาไว้วัดว่ากว่า function จะได้ประมวลผลช้าไปกี่ ms (เพดานของ Discord คือ 3 วินาที)
+function interactionLatencyMs(id) {
+  try {
+    return Date.now() - (Number(BigInt(id) >> 22n) + DISCORD_EPOCH);
+  } catch {
+    return null;
+  }
+}
 
 // ตอบกลับแบบ ephemeral (เห็นคนเดียว) เพื่อไม่ให้คนอื่นรู้ว่าใครเป็นคนสั่ง
 function ephemeral(content) {
@@ -64,7 +75,16 @@ export async function POST(request) {
     return Response.json({ type: InteractionResponseType.PONG });
   }
 
-  // 4. จัดการคำสั่ง /send
+  // 4. จัดการคำสั่ง /ping — เช็คว่าบอทยังตอบอยู่และตอบช้าแค่ไหน
+  if (
+    interaction.type === InteractionType.APPLICATION_COMMAND &&
+    interaction.data?.name === 'ping'
+  ) {
+    const latency = interactionLatencyMs(interaction.id);
+    return ephemeral(latency === null ? 'Pong! 🏓' : `Pong! 🏓 (${latency} ms)`);
+  }
+
+  // 5. จัดการคำสั่ง /send
   if (
     interaction.type === InteractionType.APPLICATION_COMMAND &&
     interaction.data?.name === 'send'
@@ -109,6 +129,6 @@ export async function POST(request) {
     }
   }
 
-  // 5. คำสั่งอื่นที่ยังไม่รองรับ — ต้องตอบอะไรกลับไปเสมอ ไม่งั้น Discord ขึ้น "did not respond"
+  // 6. คำสั่งอื่นที่ยังไม่รองรับ — ต้องตอบอะไรกลับไปเสมอ ไม่งั้น Discord ขึ้น "did not respond"
   return ephemeral('ไม่รู้จักคำสั่งนี้');
 }
