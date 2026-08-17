@@ -81,9 +81,14 @@ https://<ชื่อโปรเจกต์>.vercel.app/api/interactions
 npm test
 ```
 
-ชุดทดสอบสร้าง Ed25519 keypair ขึ้นมาเซ็นจริงแล้วเรียก handler ตรงๆ ไม่ต้องใช้ token
-หรือต่อเน็ต ครอบคลุมทั้ง PING/PONG, ลายเซ็นผิดต้องได้ 401, `/send` สำเร็จ,
-กรณี Discord ตอบ error และกรณี env var หาย
+รัน 29 เคส ไม่ต้องใช้ token จริงหรือต่อเน็ต แบ่งเป็น 2 ชุด:
+
+- `test/interactions.test.mjs` — เรียก handler ตรงๆ (20 เคส) ครอบคลุม PING/PONG,
+  ลายเซ็นผิดต้องได้ 401, `/send` สำเร็จ, Discord ตอบ 403, คำสั่งไม่รู้จัก,
+  body พัง และ env var หาย
+- `test/http-e2e.test.mjs` — เปิด HTTP server จริงแล้วจำลอง adapter ของ Vercel (9 เคส)
+  ยิงผ่าน TCP จริงตามลำดับที่ Discord ใช้ตรวจตอนกด Save Endpoint URL
+  รวมถึงเช็คว่าข้อความภาษาไทย/emoji เซ็นผ่านและส่งถึงปลายทางไม่เพี้ยน
 
 ## แก้ปัญหาที่เจอบ่อย
 
