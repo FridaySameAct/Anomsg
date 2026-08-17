@@ -117,6 +117,36 @@ console.log('\n=== 6. Discord ตอบ 403 (บอทไม่มีสิท�
   check('ยังเป็น ephemeral', json.data.flags === 64);
 }
 
+console.log('\n=== 6b. Discord ตอบ 401 (token ผิด) -> ต้องบอกให้ไปแก้ที่ไหน ===');
+{
+  nextDiscordResponse = () => new Response('{"message":"401: Unauthorized"}', { status: 401 });
+  const res = await POST(
+    signed({
+      type: 2,
+      channel_id: '999',
+      data: { name: 'send', options: [{ name: 'message', value: 'hi' }] },
+    }),
+  );
+  const json = await res.json();
+  check('บอกว่าเป็นเรื่อง token', json.data.content.includes('token'), json.data?.content);
+  check('บอกให้ไปแก้ที่ DISCORD_TOKEN', json.data.content.includes('DISCORD_TOKEN'), json.data?.content);
+  check('ไม่ได้บอกว่าสำเร็จ', !json.data.content.includes('เรียบร้อย'), json.data?.content);
+}
+
+console.log('\n=== 6c. Discord ตอบ 404 (ไม่พบห้อง) ===');
+{
+  nextDiscordResponse = () => new Response('{"message":"Unknown Channel"}', { status: 404 });
+  const res = await POST(
+    signed({
+      type: 2,
+      channel_id: '999',
+      data: { name: 'send', options: [{ name: 'message', value: 'hi' }] },
+    }),
+  );
+  const json = await res.json();
+  check('แจ้งว่าไม่พบห้อง', json.data.content.includes('ไม่พบห้อง'), json.data?.content);
+}
+
 console.log('\n=== 7. คำสั่งที่ไม่รู้จัก -> ต้องตอบกลับ ไม่เงียบ ===');
 {
   const res = await POST(signed({ type: 2, channel_id: '999', data: { name: 'unknown' } }));

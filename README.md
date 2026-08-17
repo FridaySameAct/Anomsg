@@ -85,11 +85,11 @@ https://<ชื่อโปรเจกต์>.vercel.app/api/interactions
 npm test
 ```
 
-รัน 34 เคส ไม่ต้องใช้ token จริงหรือต่อเน็ต แบ่งเป็น 2 ชุด:
+รัน 38 เคส ไม่ต้องใช้ token จริงหรือต่อเน็ต แบ่งเป็น 2 ชุด:
 
-- `test/interactions.test.mjs` — เรียก handler ตรงๆ (25 เคส) ครอบคลุม PING/PONG,
-  ลายเซ็นผิดต้องได้ 401, `/send` สำเร็จ, Discord ตอบ 403, `/ping`, คำสั่งไม่รู้จัก,
-  body พัง และ env var หาย
+- `test/interactions.test.mjs` — เรียก handler ตรงๆ (29 เคส) ครอบคลุม PING/PONG,
+  ลายเซ็นผิดต้องได้ 401, `/send` สำเร็จ, Discord ตอบ 401/403/404, `/ping`,
+  คำสั่งไม่รู้จัก, body พัง และ env var หาย
 - `test/http-e2e.test.mjs` — เปิด HTTP server จริงแล้วจำลอง adapter ของ Vercel (9 เคส)
   ยิงผ่าน TCP จริงตามลำดับที่ Discord ใช้ตรวจตอนกด Save Endpoint URL
   รวมถึงเช็คว่าข้อความภาษาไทย/emoji เซ็นผ่านและส่งถึงปลายทางไม่เพี้ยน
@@ -100,6 +100,12 @@ npm test
 - `DISCORD_PUBLIC_KEY` บน Vercel ผิดหรือยังไม่ได้ใส่ (ต้องเป็น Public Key ไม่ใช่ token)
 - ใส่ env var แล้วแต่ยังไม่ได้ redeploy — Vercel ต้อง deploy ใหม่ env ถึงจะมีผล
 - เอา preview URL ไปใส่แทน production domain
+
+**บอทตอบ "ส่งไม่สำเร็จ: bot token ไม่ถูกต้อง"**
+ค่า `DISCORD_TOKEN` บน Vercel ไม่ตรงกับ token จริง เช็ค 3 อย่าง:
+- อย่าใส่คำว่า `Bot ` นำหน้า ใส่แค่ตัว token เปล่าๆ (โค้ดเติม `Bot ` ให้เอง)
+- ต้องเป็น **Bot → Token** ไม่ใช่ Client Secret หรือ Public Key
+- แก้ env var แล้วต้อง **Redeploy** ด้วย ค่าใหม่ถึงจะมีผลกับ deployment ที่รันอยู่
 
 **บอทตอบ "ส่งไม่สำเร็จ: บอทไม่มีสิทธิ์โพสต์ในห้องนี้"**
 บอทยังไม่ได้อยู่ในเซิร์ฟเวอร์ หรือไม่มี permission Send Messages ในห้องนั้น

@@ -116,8 +116,16 @@ export async function POST(request) {
         const detail = await discordRes.text();
         console.error(`Discord API ${discordRes.status}: ${detail}`);
 
+        if (discordRes.status === 401) {
+          return ephemeral(
+            'ส่งไม่สำเร็จ: bot token ไม่ถูกต้อง — ตรวจ DISCORD_TOKEN บน Vercel แล้ว redeploy',
+          );
+        }
         if (discordRes.status === 403) {
           return ephemeral('ส่งไม่สำเร็จ: บอทไม่มีสิทธิ์โพสต์ในห้องนี้');
+        }
+        if (discordRes.status === 404) {
+          return ephemeral('ส่งไม่สำเร็จ: ไม่พบห้องนี้ หรือบอทไม่ได้อยู่ในเซิร์ฟเวอร์');
         }
         return ephemeral(`ส่งไม่สำเร็จ (error ${discordRes.status})`);
       }
